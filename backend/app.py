@@ -19,7 +19,17 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "daitora.db"
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))
 TOKEN_TTL_SECONDS = int(os.getenv("TOKEN_TTL_SECONDS", str(7 * 24 * 3600)))
-ALLOWED_ORIGINS = [item.strip() for item in os.getenv("ALLOWED_ORIGINS", "https://daitora-vlog-box-prototype.pangvic9.chatgpt.site").split(",") if item.strip()]
+DEFAULT_ORIGINS = ",".join([
+    "https://daitora-vlog-box-prototype.pangvic9.chatgpt.site",
+    "https://vlog.daitora-jp.com",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+])
+ALLOWED_ORIGINS = [
+    item.strip()
+    for item in os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",")
+    if item.strip()
+]
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -199,4 +209,3 @@ def download_asset(asset_id: int, user=Depends(current_user)):
     if not path.is_file():
         raise HTTPException(410, "stored file missing")
     return FileResponse(path, media_type=row["mime_type"], filename=row["original_name"])
-

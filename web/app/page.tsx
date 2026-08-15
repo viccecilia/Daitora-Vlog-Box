@@ -1,80 +1,15 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  downloadAsset,
+  loadAssetPackages,
+  login as apiLogin,
+  previewAsset,
+  uploadAsset,
+  type DriverAssetPackage,
+  type Session,
+} from "./api";
 type Mode = "driver" | "editor";
-const assets = [
-  {
-    id: 1,
-    name: "关西机场出发_01.MOV",
-    driver: "王小明",
-    code: "D023",
-    type: "视频",
-    size: "286 MB",
-    time: "08-15 10:42",
-    duration: "00:14",
-    tone: "airport",
-    status: "新上传",
-  },
-  {
-    id: 2,
-    name: "车辆清洁_02.MOV",
-    driver: "王小明",
-    code: "D023",
-    type: "视频",
-    size: "418 MB",
-    time: "08-15 10:39",
-    duration: "00:21",
-    tone: "car",
-    status: "新上传",
-  },
-  {
-    id: 3,
-    name: "大阪城_司机视角.jpg",
-    driver: "陈师傅",
-    code: "D024",
-    type: "图片",
-    size: "8.4 MB",
-    time: "08-15 09:18",
-    duration: "JPG",
-    tone: "city",
-    status: "已查看",
-  },
-  {
-    id: 4,
-    name: "机场等待区_03.MP4",
-    driver: "李师傅",
-    code: "D025",
-    type: "视频",
-    size: "172 MB",
-    time: "08-14 18:26",
-    duration: "00:09",
-    tone: "terminal",
-    status: "已下载",
-  },
-  {
-    id: 5,
-    name: "营业所点呼_04.MOV",
-    driver: "陈师傅",
-    code: "D024",
-    type: "视频",
-    size: "351 MB",
-    time: "08-14 17:51",
-    duration: "00:18",
-    tone: "office",
-    status: "已查看",
-  },
-  {
-    id: 6,
-    name: "车内整备完成.jpg",
-    driver: "王小明",
-    code: "D023",
-    type: "图片",
-    size: "6.7 MB",
-    time: "08-14 16:33",
-    duration: "JPG",
-    tone: "interior",
-    status: "已下载",
-  },
-];
 const versions = [
   {
     id: "A",
@@ -101,14 +36,22 @@ const versions = [
 function BrandMark() {
   return <span className="brand-mark">D</span>;
 }
-function LoginScreen({ enter }: { enter: (mode: Mode) => void }) {
+function LoginScreen({ enter }: { enter: (session: Session) => void }) {
   const [user, setUser] = useState("admin");
   const [password, setPassword] = useState("Daitora1028");
   const [error, setError] = useState("");
-  function login(event: React.FormEvent) {
+  const [busy, setBusy] = useState(false);
+  async function login(event: React.FormEvent) {
     event.preventDefault();
-    if (user === "admin" && password === "Daitora1028") enter("editor");
-    else setError("账号或密码不正确");
+    setBusy(true);
+    setError("");
+    try {
+      enter(await apiLogin(user, password));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "登录失败，请稍后重试");
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <main className="login-shell">
@@ -121,17 +64,22 @@ function LoginScreen({ enter }: { enter: (mode: Mode) => void }) {
           <label>账号<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
           <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
           {error && <div className="login-error">{error}</div>}
-          <button className="login-submit" type="submit">进入剪辑工作台</button>
+          <button className="login-submit" type="submit" disabled={busy}>{busy ? "正在验证…" : "登录工作台"}</button>
         </form>
-        <button className="driver-demo" onClick={() => enter("driver")}>查看司机端演示</button>
-        <small>演示账号：admin　密码：Daitora1028</small>
+        <small>系统会根据账号角色自动进入司机端、剪辑师端或管理端。</small>
       </section>
     </main>
   );
 }
 export default function Home() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [mode, setMode] = useState<Mode>("driver");
+  const [session, setSession] = useState<Session | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("daitora-session") || "null");
+    } catch {
+      return null;
+    }
+  });
+  const mode: Mode = session?.user.role === "driver" ? "driver" : "editor";
   const [toast, setToast] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showRevision, setShowRevision] = useState(false);
@@ -139,7 +87,7 @@ export default function Home() {
     setToast(m);
     window.setTimeout(() => setToast(null), 2600);
   }
-  if (!authenticated) return <LoginScreen enter={(next) => { setMode(next); setAuthenticated(true); }} />;
+  if (!session) return <LoginScreen enter={(next) => { localStorage.setItem("daitora-session", JSON.stringify(next)); setSession(next); }} />;
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -150,25 +98,12 @@ export default function Home() {
             <span>VLOG BOX</span>
           </div>
         </div>
-        <div className="mode-switch">
-          <button
-            className={mode === "driver" ? "active" : ""}
-            onClick={() => setMode("driver")}
-          >
-            司机端
-          </button>
-          <button
-            className={mode === "editor" ? "active" : ""}
-            onClick={() => setMode("editor")}
-          >
-            剪辑师端
-          </button>
-        </div>
+        <div className="mode-switch"><button className="active">{mode === "driver" ? "司机端" : session.user.role === "admin" ? "管理端" : "剪辑师端"}</button></div>
         <div className="profile">
-          <span className="avatar">{mode === "driver" ? "王" : "剪"}</span>
+          <span className="avatar">{session.user.name[0]}</span>
           <div>
-            <strong>{mode === "driver" ? "王小明" : "剪辑工作台"}</strong>
-            <span>{mode === "driver" ? "司机 D023" : "唯一剪辑账户"}</span>
+            <strong>{session.user.name}</strong>
+            <button className="logout-button" onClick={() => { localStorage.removeItem("daitora-session"); setSession(null); }}>退出登录</button>
           </div>
         </div>
       </header>
@@ -179,7 +114,7 @@ export default function Home() {
           notify={notify}
         />
       ) : (
-        <EditorView notify={notify} />
+        <EditorView notify={notify} session={session} />
       )}{" "}
       {showUpload && (
         <UploadPanel
@@ -331,22 +266,9 @@ function VideoCover({ version }: { version: (typeof versions)[number] }) {
     </div>
   );
 }
-function EditorView({ notify }: { notify: (m: string) => void }) {
+function EditorView({ notify, session }: { notify: (m: string) => void; session: Session }) {
   const [panel, setPanel] = useState("assets");
-  const [type, setType] = useState("全部");
-  const [assetDriver, setAssetDriver] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const visible = useMemo(
-    () =>
-      assets.filter(
-        (a) =>
-          (type === "全部" || a.type === type) &&
-          `${a.driver}${a.code}`
-            .toLowerCase()
-            .includes(assetDriver.toLowerCase()),
-      ),
-    [type, assetDriver],
-  );
   const menu = (id: string, icon: string, label: string, count?: string) => (
     <button
       className={panel === id ? "active" : ""}
@@ -361,8 +283,8 @@ function EditorView({ notify }: { notify: (m: string) => void }) {
     <div className="editor-layout">
       <aside className="sidebar">
         <div className="sidebar-label">文件空间</div>
-        {menu("assets", "▦", "素材夹", "86")}
-        {menu("finished", "▱", "成品夹", "28")}
+        {menu("assets", "▦", "素材夹")}
+        {menu("finished", "▱", "成品夹", "开发中")}
         <div className="sidebar-label lower">管理</div>
         {menu("drivers", "♙", "司机管理")}
         {menu("stats", "▥", "剪辑统计")}
@@ -370,23 +292,19 @@ function EditorView({ notify }: { notify: (m: string) => void }) {
         <div className="storage-card">
           <p>
             <span>存储空间</span>
-            <strong>28%</strong>
+            <strong>VPS</strong>
           </p>
           <div>
             <i />
           </div>
-          <small>已使用 284 GB / 1 TB</small>
+          <small>容量监控将在下一批接入</small>
         </div>
       </aside>
       <section className="editor-main">
         {panel === "assets" && (
           <AssetsPanel
-            visible={visible}
-            type={type}
-            setType={setType}
-            driverQuery={assetDriver}
-            setDriverQuery={setAssetDriver}
             notify={notify}
+            session={session}
           />
         )}
         {panel === "finished" && (
@@ -413,20 +331,56 @@ function EditorView({ notify }: { notify: (m: string) => void }) {
 }
 
 function AssetsPanel({
-  visible,
-  type,
-  setType,
-  driverQuery,
-  setDriverQuery,
   notify,
+  session,
 }: {
-  visible: typeof assets;
-  type: string;
-  setType: (v: string) => void;
-  driverQuery: string;
-  setDriverQuery: (v: string) => void;
   notify: (m: string) => void;
+  session: Session;
 }) {
+  const [packages, setPackages] = useState<DriverAssetPackage[]>([]);
+  const [type, setType] = useState("全部");
+  const [driverQuery, setDriverQuery] = useState("");
+  const [sort, setSort] = useState<"time" | "type">("time");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [targetDriver, setTargetDriver] = useState("");
+  async function refresh() {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await loadAssetPackages(session.token, sort);
+      setPackages(result.items);
+      setTargetDriver((current) => current || result.items[0]?.code || "");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "素材读取失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+  // Loading remote data is the synchronization performed by this effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { void refresh(); }, [sort]);
+  const visiblePackages = packages.filter((item) =>
+    `${item.driver}${item.code}`.toLowerCase().includes(driverQuery.toLowerCase()),
+  );
+  const visible = visiblePackages.flatMap((item) =>
+    item.files
+      .filter((file) => type === "全部" || (type === "视频" ? file.media_type === "video" : file.media_type === "image"))
+      .map((file) => ({ file, driver: item.driver, code: item.code })),
+  );
+  const totalBytes = packages.reduce((sum, item) => sum + item.sizeBytes, 0);
+  const totalFiles = packages.reduce((sum, item) => sum + item.count, 0);
+  async function handleUpload(file?: File) {
+    if (!file || !targetDriver) return;
+    try {
+      notify(`正在上传：${file.name}`);
+      await uploadAsset(session.token, file, targetDriver);
+      notify(`上传完成：${file.name}`);
+      await refresh();
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "上传失败");
+    }
+  }
   return (
     <>
       <div className="editor-heading">
@@ -435,28 +389,28 @@ function AssetsPanel({
           <h1>所有司机上传的素材</h1>
           <p>司机是检索条件，不限制素材跨司机调用。</p>
         </div>
-        <button
-          className="solid-button"
-          onClick={() => notify("已开始打包下载所选素材")}
-        >
-          下载所选
-        </button>
+        <div className="web-upload-controls">
+          <select value={targetDriver} onChange={(event) => setTargetDriver(event.target.value)} aria-label="选择素材所属司机">
+            {packages.map((item) => <option key={item.code} value={item.code}>{item.driver} · {item.code}</option>)}
+          </select>
+          <label className="solid-button">＋ 上传素材<input type="file" accept="video/*,image/*" onChange={(event) => void handleUpload(event.target.files?.[0])} /></label>
+        </div>
       </div>
       <div className="metric-grid">
         <Metric
-          value="86"
+          value={String(totalFiles)}
           label="素材总数"
-          note="视频 68 · 图片 18"
+          note={`${packages.length} 个司机素材包`}
           tone="coral"
         />
-        <Metric value="14" label="今天新增" note="来自 5 名司机" tone="blue" />
+        <Metric value={String(packages.filter((item) => item.count > 0).length)} label="有素材司机" note="按司机固定一个包" tone="blue" />
         <Metric
-          value="24.8"
-          label="占用空间 GB"
+          value={formatBytes(totalBytes)}
+          label="素材占用"
           note="原文件未压缩"
           tone="amber"
         />
-        <Metric value="6" label="未查看" note="最新上传内容" tone="green" />
+        <Metric value={loading ? "…" : "正常"} label="API 状态" note="数据来自 VPS" tone="green" />
       </div>
       <div className="folder-search">
         <div>
@@ -470,8 +424,8 @@ function AssetsPanel({
         </div>
         <p>
           {driverQuery
-            ? `找到 ${visible.length} 个对应素材`
-            : `当前显示全部司机素材`}
+            ? `找到 ${visiblePackages.length} 个司机包、${visible.length} 个素材`
+            : `当前显示 ${packages.length} 个司机素材包`}
         </p>
       </div>
       <div className="asset-panel">
@@ -490,8 +444,14 @@ function AssetsPanel({
                 {x}
               </button>
             ))}
+            <select value={sort} onChange={(event) => setSort(event.target.value as "time" | "type")} aria-label="素材排序">
+              <option value="time">按上传时间</option>
+              <option value="type">按文件类型</option>
+            </select>
           </div>
         </div>
+        {error && <div className="data-state error">{error}<button onClick={() => void refresh()}>重试</button></div>}
+        {loading && <div className="data-state">正在读取 VPS 素材…</div>}
         <div className="asset-header">
           <span>预览 / 文件名</span>
           <span>上传司机</span>
@@ -500,49 +460,61 @@ function AssetsPanel({
           <span>上传时间</span>
           <span>操作</span>
         </div>
-        {visible.map((a) => (
-          <div className="asset-row" key={a.id}>
+        {!loading && !error && visible.map(({ file, driver, code }) => (
+          <div className="asset-row" key={file.id}>
             <div className="asset-file">
               <button
-                className={`asset-thumb ${a.tone}`}
-                onClick={() => notify(`正在预览：${a.name}`)}
+                className={`asset-thumb ${file.media_type === "video" ? "car" : "city"}`}
+                onClick={() => void previewAsset(session.token, file).catch((reason) => notify(reason.message))}
               >
-                <span>{a.type === "视频" ? "▶" : "▧"}</span>
-                <time>{a.duration}</time>
+                <span>{file.media_type === "video" ? "▶" : "▧"}</span>
+                <time>{file.media_type === "video" ? "视频" : "图片"}</time>
               </button>
               <div className="asset-title">
-                <strong>{a.name}</strong>
+                <strong>{file.original_name}</strong>
                 <small>
-                  <i className={a.status === "新上传" ? "new" : ""} />
-                  {a.status}
+                  <i className="new" />真实文件
                 </small>
               </div>
             </div>
             <div className="driver-cell">
-              <span>{a.driver[0]}</span>
+              <span>{driver[0]}</span>
               <div>
-                {a.driver}
-                <small>{a.code}</small>
+                {driver}
+                <small>{code}</small>
               </div>
             </div>
             <span
-              className={`type-tag ${a.type === "视频" ? "video" : "image"}`}
+              className={`type-tag ${file.media_type === "video" ? "video" : "image"}`}
             >
-              {a.type}
+              {file.media_type === "video" ? "视频" : file.media_type === "image" ? "图片" : "文件"}
             </span>
-            <span>{a.size}</span>
-            <span>{a.time}</span>
+            <span>{formatBytes(file.size_bytes)}</span>
+            <span>{formatTime(file.uploaded_at)}</span>
             <div className="asset-actions">
-              <button onClick={() => notify(`正在预览：${a.name}`)}>
+              <button onClick={() => void previewAsset(session.token, file).catch((reason) => notify(reason.message))}>
                 预览
               </button>
-              <button onClick={() => notify(`开始下载：${a.name}`)}>↓</button>
+              <button onClick={() => void downloadAsset(session.token, file).catch((reason) => notify(reason.message))}>↓</button>
             </div>
           </div>
         ))}
       </div>
+      {!loading && !error && visible.length === 0 && <div className="data-state">当前筛选条件下还没有素材</div>}
     </>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return "0 MB";
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `${(bytes / 1024 ** 2).toFixed(bytes < 10 * 1024 ** 2 ? 1 : 0)} MB`;
+}
+
+function formatTime(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function DriversPanel({ notify }: { notify: (m: string) => void }) {

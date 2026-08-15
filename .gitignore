@@ -4,6 +4,9 @@ web/.vinext/
 web/dist/
 web/build/
 web/.wrangler/
+web/.playwright-cli/
+web/output/
+web/*.tsbuildinfo
 *.log
 __pycache__/
 *.py[cod]
