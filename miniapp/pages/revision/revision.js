@@ -1,0 +1,1 @@
+Page({data:{types:["字幕修改","更换音乐","删除镜头","画面打码","视频太长","其他"],selected:"删除镜头"},selectType(e){this.setData({selected:e.currentTarget.dataset.value})},submit(){wx.showToast({title:"已提交"});setTimeout(()=>wx.navigateBack(),800)}})

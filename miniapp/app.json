@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/home/home",
+    "pages/upload/upload",
+    "pages/result/result",
+    "pages/revision/revision",
+    "pages/editor/editor"
+  ],
+  "window": {
+    "navigationBarTitleText": "Daitora Vlog Box",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f7fb"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

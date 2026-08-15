@@ -1,0 +1,7 @@
+{
+  "appid": "touristappid",
+  "projectname": "daitora-vlog-box",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "setting": { "es6": true, "enhance": true, "postcss": true, "minified": true }
+}

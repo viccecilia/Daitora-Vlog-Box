@@ -1,0 +1,9 @@
+web/node_modules/
+web/.next/
+web/.vinext/
+web/dist/
+web/build/
+web/.wrangler/
+*.log
+.idea/
+.DS_Store

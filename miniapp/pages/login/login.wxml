@@ -1,0 +1,8 @@
+<view class="login-page">
+  <view class="logo">D</view>
+  <view class="brand">Daitora</view><view class="sub">VLOG BOX</view>
+  <view class="welcome">欢迎使用素材协作中心</view>
+  <button class="primary login" bindtap="driverLogin">司机微信登录</button>
+  <button class="ghost login" bindtap="editorLogin">剪辑师移动端登录</button>
+  <view class="hint">首次登录需输入管理员提供的邀请码完成账号绑定</view>
+</view>
