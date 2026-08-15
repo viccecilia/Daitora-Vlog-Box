@@ -12,6 +12,7 @@
 
 - `drivers`：司机编号、姓名、手机号、微信 openid、状态。
 - `assets`：文件名、所属司机、类型、大小、上传时间、存储键、抽帧图、状态。
+- `driver_asset_packages`：每位司机固定一个素材包；后续上传只向该包追加，不按日期重复建包。
 - `finished_products`：目标司机、版本号、视频地址、封面、时长、上传时间、状态。
 - `revisions`：成品、司机、文字要求、时间点、截图附件、处理状态。
 - `audit_logs`：操作者、动作、对象、IP、时间。
@@ -22,6 +23,7 @@
 - `POST /auth/wechat/bind`：可选功能；登录后用小程序 `wx.login` code 绑定微信，后续可免输密码。
 - `GET /drivers?query=`：按姓名或司机编号搜索。
 - `GET /assets?driverId=&type=&query=&cursor=`：统一素材夹列表。
+- `GET /driver-asset-packages?driverId=&sort=time|type`：按司机返回素材包；包内素材可按上传时间或文件类型排序。
 - `POST /assets/upload-session`：申请分片或直传地址。
 - `POST /assets/complete`：登记文件并触发视频抽帧。
 - `GET /finished-products?driverId=&query=`：成品夹列表。
