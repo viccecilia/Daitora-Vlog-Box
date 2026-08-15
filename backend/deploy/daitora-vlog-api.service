@@ -1,0 +1,20 @@
+[Unit]
+Description=Daitora Vlog Box API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/daitora-media-library
+EnvironmentFile=/home/ubuntu/daitora-media-library/.env
+ExecStart=/home/ubuntu/daitora-media-library/.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 18772 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

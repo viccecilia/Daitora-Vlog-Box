@@ -1,10 +1,4 @@
-const demoAccounts = {
-  D023: { password: "123456", role: "driver", name: "王小明" },
-  D024: { password: "123456", role: "driver", name: "陈师傅" },
-  D025: { password: "123456", role: "driver", name: "李师傅" },
-  editor: { password: "Daitora1028", role: "editor", name: "剪辑工作台" },
-  admin: { password: "Daitora1028", role: "editor", name: "管理员" }
-}
+const { request } = require("../../services/api")
 
 Page({
   data: { account: "", password: "", showPassword: false, loading: false },
@@ -13,7 +7,7 @@ Page({
   onPasswordInput(event) { this.setData({ password: event.detail.value }) },
   togglePassword() { this.setData({ showPassword: !this.data.showPassword }) },
 
-  login() {
+  async login() {
     const account = this.data.account
     const password = this.data.password
     if (!account || !password) {
@@ -21,20 +15,20 @@ Page({
       return
     }
 
-    const matchedKey = Object.keys(demoAccounts).find(key => key.toLowerCase() === account.toLowerCase())
-    const user = matchedKey ? demoAccounts[matchedKey] : null
-    if (!user || user.password !== password) {
-      wx.showToast({ title: "账号或密码不正确", icon: "none" })
-      return
-    }
-
     this.setData({ loading: true })
-    const app = getApp()
-    app.globalData.role = user.role
-    app.globalData.user = { id: matchedKey, name: user.name }
-    wx.setStorageSync("token", `demo-${user.role}-${matchedKey}`)
-    wx.setStorageSync("role", user.role)
-    wx.setStorageSync("user", app.globalData.user)
-    wx.reLaunch({ url: user.role === "driver" ? "/pages/home/home" : "/pages/editor/editor" })
+    try {
+      const result = await request("/auth/login", { method: "POST", data: { account, password } })
+      const app = getApp()
+      app.globalData.role = result.user.role
+      app.globalData.user = result.user
+      wx.setStorageSync("token", result.token)
+      wx.setStorageSync("role", result.user.role)
+      wx.setStorageSync("user", result.user)
+      wx.reLaunch({ url: result.user.role === "driver" ? "/pages/home/home" : "/pages/editor/editor" })
+    } catch (error) {
+      const message = error && error.data && error.data.detail ? error.data.detail : "登录失败，请检查网络后重试"
+      wx.showToast({ title: message, icon: "none" })
+      this.setData({ loading: false })
+    }
   }
 })
