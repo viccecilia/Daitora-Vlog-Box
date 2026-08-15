@@ -5,5 +5,7 @@ web/dist/
 web/build/
 web/.wrangler/
 *.log
+__pycache__/
+*.py[cod]
 .idea/
 .DS_Store
