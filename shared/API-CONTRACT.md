@@ -18,8 +18,8 @@
 
 ## V1 接口
 
-- `POST /auth/admin/login`：网页账号密码登录。
-- `POST /auth/wechat/login`：小程序 `wx.login` code 换取会话。
+- `POST /auth/login`：网页与小程序统一账号密码登录，返回用户、角色和会话；客户端按 `driver`、`editor` 或 `admin` 自动进入相应工作台。
+- `POST /auth/wechat/bind`：可选功能；登录后用小程序 `wx.login` code 绑定微信，后续可免输密码。
 - `GET /drivers?query=`：按姓名或司机编号搜索。
 - `GET /assets?driverId=&type=&query=&cursor=`：统一素材夹列表。
 - `POST /assets/upload-session`：申请分片或直传地址。
