@@ -6,7 +6,10 @@ web/build/
 web/.wrangler/
 web/.playwright-cli/
 web/output/
+web/deploy/
 web/*.tsbuildinfo
+.playwright-cli/
+miniapp/project.private.config.json
 *.log
 __pycache__/
 *.py[cod]

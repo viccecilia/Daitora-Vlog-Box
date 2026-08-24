@@ -1,11 +1,12 @@
 # Daitora Vlog Box
 
-企业素材库双端项目，按照已确认的 Demo 拆分为两个客户端，共用同一套后端接口和文件存储。
+企业素材库双端项目。Web 与微信小程序共用同一套 API、SQLite 业务数据和原始文件存储。
 
 ## 目录
 
-- `web/`：管理员与剪辑师使用的网页版，也保留司机端演示入口。
-- `miniapp/`：微信小程序，面向司机上传、查看成品、提交修改和手机下载；同时提供移动剪辑入口。
+- `backend/`：FastAPI、SQLite、幂等迁移、原始素材和成品文件服务。
+- `web/`：管理员与剪辑师使用的桌面优先管理端。
+- `miniapp/`：上传用户与移动剪辑师共用的微信小程序。
 - `shared/`：双端共用的数据模型和接口约定。
 
 ## 网页版
@@ -17,13 +18,16 @@ npm install
 npm run dev
 ```
 
-演示账号：`admin`  
-演示密码：`Daitora1028`
+构建与验证：`npm run lint`、`npm test`。API 地址由 `VITE_API_BASE_URL` 提供。
 
 ## 微信小程序
 
-使用微信开发者工具导入 `miniapp` 目录。当前 `project.config.json` 使用测试 AppID；正式使用时替换为企业自己的 AppID，并在 `services/api.js` 配置正式接口域名。
+使用微信开发者工具导入 `miniapp` 目录。AppID 放在本机私有配置中；正式域名必须加入微信公众平台 request/uploadFile/downloadFile 合法域名。
 
-## 正式上线前
+## 后端与迁移
 
-需要接入服务端登录、数据库和对象存储。演示密码不得继续放在客户端代码中，微信 AppSecret 只能保存在服务端。
+进入 `backend` 安装 `requirements.txt` 后运行 `uvicorn app:app`。首次启动自动执行 `migrations/` 中的幂等迁移。口令只通过 `BOOTSTRAP_ADMIN_PASSWORD`、`BOOTSTRAP_EDITOR_PASSWORD`、`BOOTSTRAP_UPLOADER_PASSWORD` 环境变量设置。
+
+升级前停止写入并备份 SQLite 数据库、`uploads`、`finished-products` 和 `asset-memos`。部署顺序为：备份与完整性检查 → 安装依赖 → 启动新版本 → `/health` → 角色端到端验收 → 切换流量。回滚时停止新版本、恢复应用版本及整套数据库/媒体备份，不做 SQLite 局部删列。
+
+原始视频按字节保存，不压缩、不转码。整包下载使用磁盘临时 ZIP，完成响应后自动删除临时文件；生产环境仍需监控磁盘余量和反向代理超时。

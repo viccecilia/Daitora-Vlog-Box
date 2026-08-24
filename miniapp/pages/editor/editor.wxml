@@ -1,18 +1,48 @@
 <view class="page">
-  <view class="kicker">剪辑师移动端</view>
-  <view class="heading-row"><view><view class="title">司机素材包</view><view class="muted">每位司机一个素材包，上传内容持续追加</view></view><view class="message">消息 2</view></view>
-  <view class="overview"><view><b>4</b><text>司机</text></view><view><b>4</b><text>素材包</text></view><view><b>36</b><text>文件</text></view><view><b>7.2</b><text>GB</text></view></view>
-  <input class="search" placeholder="搜索司机、编号或素材包" bindinput="search" />
-  <scroll-view class="driver-filter" scroll-x enhanced show-scrollbar="{{false}}"><view class="driver-filter-inner"><view wx:for="{{drivers}}" wx:key="code" class="driver-chip {{activeDriver === item.code ? 'active' : ''}}" data-code="{{item.code}}" bindtap="selectDriver">{{item.name}}<text wx:if="{{item.code !== 'all'}}"> {{item.code}}</text></view></view></scroll-view>
-  <view class="section-row"><b>全部司机</b><text>{{visible.length}} 个素材包 · 按最近上传排序</text></view>
-  <view class="sort-row"><text>包内素材排序</text><view><button class="sort-button {{sortMode === 'time' ? 'active' : ''}}" data-mode="time" bindtap="selectSort">上传时间</button><button class="sort-button {{sortMode === 'type' ? 'active' : ''}}" data-mode="type" bindtap="selectSort">文件类型</button></view></view>
-  <view wx:if="{{!visible.length}}" class="empty">没有找到对应素材包</view>
-  <view wx:for="{{visible}}" wx:key="id" class="package-card">
-    <view class="package-head"><view class="driver-avatar {{item.tone}}">{{item.avatar}}</view><view class="driver-info"><b>{{item.driver}}</b><text>{{item.code}} · {{item.time}}</text></view><view class="status {{item.tone}}-text">{{item.status}}</view></view>
-    <view class="package-title">{{item.title}}</view><view class="package-id">{{item.id}}</view>
-    <view class="preview-grid"><view wx:for="{{item.previews}}" wx:for-item="preview" wx:key="index" class="preview {{item.tone}} preview-{{index}}"><text class="play">▶</text><text class="duration">{{preview}}</text><view wx:if="{{index === 3 && item.count > 4}}" class="more">+{{item.count - 4}}</view></view></view>
-    <view class="package-stats"><text><b>{{item.count}}</b> 项</text><text>{{item.videos}} 视频</text><text>{{item.photos}} 图片</text><text>{{item.size}}</text></view>
-    <view wx:if="{{expanded === item.id}}" class="file-list"><view wx:for="{{item.displayFiles}}" wx:for-item="file" wx:key="name" class="file-row"><text class="file-icon">{{file.icon}}</text><view class="file-detail"><text class="file-name">{{file.name}}</text><text class="file-data">{{file.time}}　{{file.type}}　{{file.size}}</text></view><text class="preview-link">预览</text></view><view class="remaining">其余 {{item.count - item.displayFiles.length}} 项进入详情查看</view></view>
-    <view class="package-actions"><button class="ghost" size="mini" data-id="{{item.id}}" bindtap="togglePackage">{{expanded === item.id ? '收起' : '查看包内素材'}}</button><button class="download-all" size="mini" data-id="{{item.id}}" bindtap="downloadPackage">整包下载</button></view>
+  <view class="heading-row">
+    <view><view class="kicker">剪辑工作台</view><view class="title">剪辑任务</view><view class="muted">集中处理已提交的素材包</view></view>
+    <view class="message">待办 {{unread}}</view>
+  </view>
+  <view class="library-tabs"><button class="{{libraryMode==='folders'?'active':''}}" data-mode="folders" bindtap="setLibraryMode">文件夹模式</button><button class="{{libraryMode==='files'?'active':''}}" data-mode="files" bindtap="setLibraryMode">全部文件模式</button></view>
+  <scroll-view class="driver-filter" scroll-x><view class="driver-filter-inner"><button class="sort-button {{!selectedUser?'active':''}}" data-account="" bindtap="selectUser">全部用户</button><button wx:for="{{users}}" wx:key="account" class="sort-button {{selectedUser===item.account?'active':''}}" data-account="{{item.account}}" bindtap="selectUser">{{item.display_name}} · {{item.account}}</button></view></scroll-view>
+  <block wx:if="{{libraryMode==='folders'}}">
+  <view wx:if="{{selectedUser}}" class="filter-hint">当前上传用户：{{selectedUser}}</view>
+  <view wx:else class="filter-hint">当前显示：全部用户的待处理素材包</view>
+  <view class="overview">
+    <view><b>{{stats.pendingEdit||0}}</b><text>待剪辑</text></view><view><b>{{stats.editing||0}}</b><text>剪辑中</text></view><view><b>{{stats.revisionRequested||0}}</b><text>待修改</text></view><view><b>{{stats.pendingReview||0}}</b><text>待确认</text></view>
+  </view>
+  <view class="search-box"><text>⌕</text><input placeholder="搜索用户名或素材包" bindinput="search"/></view>
+  <view class="view-switch"><button class="{{viewMode==='list'?'active':''}}" data-mode="list" bindtap="setViewMode">列表</button><button class="{{viewMode==='grid'?'active':''}}" data-mode="grid" bindtap="setViewMode">平铺</button></view>
+  <scroll-view class="driver-filter" scroll-x><view class="driver-filter-inner"><button wx:for="{{statuses}}" wx:key="v" class="sort-button {{status===item.v?'active':''}}" data-status="{{item.v}}" bindtap="status">{{item.n}}</button></view></scroll-view>
+  <view wx:if="{{!visible.length}}" class="empty">暂无对应任务</view>
+  <view class="task-collection {{viewMode}}"><view wx:for="{{visible}}" wx:key="id" class="package-card task-card">
+    <view class="package-head"><view class="driver-avatar">{{item.avatar}}</view><view class="driver-info"><b>{{item.driver}}</b><text>接收账号：{{item.driverCode}} · {{item.timeText}}</text></view><view class="status">{{item.statusLabel}}</view></view>
+    <view class="package-title">{{item.displayTitle}}</view>
+    <view class="package-id">{{item.dateLabel}} {{item.dateText}} · {{item.videoCount}} 视频 · {{item.imageCount}} 图片 · {{item.sizeText}}</view>
+    <view class="package-actions">
+      <button class="ghost" data-id="{{item.id}}" bindtap="detail">查看并下载</button>
+      <button wx:if="{{item.status==='PENDING_EDIT'}}" class="download-all" data-id="{{item.id}}" data-action="start-editing" bindtap="action">开始剪辑</button>
+      <button wx:if="{{item.status==='REVISION_REQUESTED'}}" class="download-all" data-id="{{item.id}}" data-action="start-revision" bindtap="action">开始修改</button>
+      <button wx:if="{{item.status==='EDITING'||item.status==='REVISING'}}" class="download-all" data-id="{{item.id}}" bindtap="uploadProduct">回传成品</button>
+    </view>
+  </view></view></block>
+  <block wx:else>
+    <view class="search-box"><text>⌕</text><input placeholder="搜索文件或素材包" data-field="query" bindblur="fileFilter"/></view>
+    <view wx:if="{{!libraryFiles.length}}" class="empty">当前筛选下暂无文件</view>
+    <view wx:for="{{libraryFiles}}" wx:key="id" class="package-card file-card"><view class="package-head"><view class="file-type {{item.media_type}}">{{item.typeLabel}}</view><view class="driver-info"><b>{{item.original_name}}</b><text>{{item.user_name}} · {{item.user_account}}</text></view><view class="status">{{item.package_status}}</view></view><view class="package-title">{{item.package_title}}</view><view class="package-id">{{item.dateLabel}} {{item.effective_date}} · 上传于 {{item.uploadText}}</view><view class="package-id">{{item.memo_text || '无文字备注'}}</view><view class="package-actions"><button class="ghost" data-id="{{item.id}}" bindtap="downloadLibraryAsset">预览/下载</button></view></view>
+  </block>
+</view>
+<view wx:if="{{selected}}" class="detail-backdrop" bindtap="closeDetail">
+  <view class="detail-sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="detail-header"><view class="detail-heading"><b>{{selected.displayTitle || selected.title}}</b><text>{{selected.driverCode}} · {{selected.assets.length}} 个素材</text></view><button class="sheet-close" bindtap="closeDetail">×</button></view>
+    <view class="download-summary"><view><b>素材文件</b><text>图片和视频将保存到手机相册</text></view><button class="download-package" bindtap="downloadAll">全部下载</button></view>
+    <scroll-view class="detail-files" scroll-y>
+      <view wx:for="{{selected.assets}}" wx:key="id" class="detail-file">
+        <view class="file-type {{item.media_type}}">{{item.media_type === 'video' ? '视频' : item.media_type === 'image' ? '图片' : '文件'}}</view>
+        <view class="file-detail"><text class="file-name">{{item.original_name}}</text><text class="file-data">{{item.memo_text || '无文字备注'}}</text></view>
+        <button class="file-download" data-id="{{item.id}}" bindtap="downloadAsset">下载</button>
+      </view>
+    </scroll-view>
   </view>
 </view>

@@ -1,47 +1,59 @@
-const packages = [
-  { id:"DRIVER-D023", driver:"王小明", code:"D023", avatar:"王", title:"王小明的素材包", time:"08-15 10:42", count:12, videos:10, photos:2, size:"2.31 GB", status:"新上传", tone:"coral", previews:["00:14","00:21","JPG","00:18"], files:[{name:"关西机场出发_01.MOV",time:"08-15 10:42",type:"视频 · MOV",size:"286 MB"},{name:"车辆清洁_02.MOV",time:"08-15 10:39",type:"视频 · MOV",size:"418 MB"},{name:"司机接客画面_03.JPG",time:"08-15 10:31",type:"图片 · JPG",size:"8.4 MB"}] },
-  { id:"DRIVER-D024", driver:"陈师傅", code:"D024", avatar:"陈", title:"陈师傅的素材包", time:"08-15 09:18", count:8, videos:7, photos:1, size:"1.84 GB", status:"待剪辑", tone:"blue", previews:["00:11","00:16","00:09","JPG"], files:[{name:"机场到达大厅_01.MOV",time:"08-15 09:18",type:"视频 · MOV",size:"312 MB"},{name:"乘客上车_02.MOV",time:"08-15 09:12",type:"视频 · MOV",size:"264 MB"},{name:"大阪市区沿途_03.JPG",time:"08-15 09:05",type:"图片 · JPG",size:"7.2 MB"}] },
-  { id:"DRIVER-D025", driver:"李师傅", code:"D025", avatar:"李", title:"李师傅的素材包", time:"08-14 18:26", count:6, videos:6, photos:0, size:"968 MB", status:"剪辑中", tone:"amber", previews:["00:09","00:23","00:12","00:17"], files:[{name:"机场等待区_03.MP4",time:"08-14 18:26",type:"视频 · MP4",size:"172 MB"},{name:"夜间道路_04.MOV",time:"08-14 18:19",type:"视频 · MOV",size:"201 MB"},{name:"酒店到达_05.MOV",time:"08-14 18:04",type:"视频 · MOV",size:"184 MB"}] },
-  { id:"DRIVER-D026", driver:"赵师傅", code:"D026", avatar:"赵", title:"赵师傅的素材包", time:"08-14 16:33", count:10, videos:8, photos:2, size:"2.06 GB", status:"已查看", tone:"green", previews:["JPG","00:15","00:20","JPG"], files:[{name:"车辆外观_01.JPG",time:"08-14 16:33",type:"图片 · JPG",size:"6.7 MB"},{name:"车内空间_02.MOV",time:"08-14 16:28",type:"视频 · MOV",size:"392 MB"},{name:"行李装载_03.MOV",time:"08-14 16:20",type:"视频 · MOV",size:"318 MB"}] }
-]
-
-function sortedPackages(list, mode) {
-  return list.map(item => ({
-    ...item,
-    displayFiles: item.files.map(file => ({ ...file, icon: file.type.indexOf("图片") === 0 ? "图" : "视" })).sort((a, b) => {
-      if (mode === "type") {
-        const typeOrder = value => value.type.indexOf("视频") === 0 ? 0 : 1
-        return typeOrder(a) - typeOrder(b) || b.time.localeCompare(a.time)
-      }
-      return b.time.localeCompare(a.time)
-    })
-  }))
-}
-
+const { request } = require("../../services/api")
+const { activeTasks, taskStats } = require("./editor-logic")
+const labels={PENDING_EDIT:"待剪辑",EDITING:"剪辑中",REVISION_REQUESTED:"待修改",REVISING:"修改中",PENDING_REVIEW:"待确认",COMPLETED:"已完成"}
+const cleanTitle=value=>String(value||"").replace(/\u53f8\u673a\u65e5\u5e38/g,"日常素材").replace(/\u53f8\u673a\s*/g,"").replace(/\s*｜\s*/g,"｜").trim()
+const shortTime=value=>{const m=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);return m?`${m[2]}-${m[3]} ${m[4]}:${m[5]}`:""}
+const displayTitle=value=>{const parts=cleanTitle(value).split("｜").filter(Boolean);return parts[parts.length-1]||"素材包"}
 Page({
-  data: {
-    packages,
-    visible: sortedPackages(packages, "time"),
-    drivers: [{name:"全部",code:"all"},{name:"王小明",code:"D023"},{name:"陈师傅",code:"D024"},{name:"李师傅",code:"D025"},{name:"赵师傅",code:"D026"}],
-    activeDriver: "all",
-    query: "",
-    sortMode: "time",
-    expanded: ""
+  data:{packages:[],visible:[],selected:null,status:"",query:"",viewMode:"list",libraryMode:"folders",users:[],selectedUser:"",libraryFiles:[],fileFilters:{query:"",sort:"newest"},stats:{},statuses:[{v:"",n:"全部"},{v:"PENDING_EDIT",n:"待剪辑"},{v:"EDITING",n:"剪辑中"},{v:"REVISION_REQUESTED",n:"待修改"},{v:"PENDING_REVIEW",n:"待确认"}]},
+  onShow(){this.load()},
+  async load(){try{const [p,n,u]=await Promise.all([request("/material-packages?page_size=100&sort=newest"),request("/notifications"),request("/drivers")]);const profiles=new Map((u.items||[]).map(x=>[x.account,x.display_name]));const items=activeTasks(p.items).map(x=>({...x,driver:profiles.get(x.driverCode)||x.driver,displayTitle:displayTitle(x.title),dateLabel:x.dateSource==="shoot_date"?"拍摄日期":"上传日期",dateText:x.effectiveDate||x.shootDate,timeText:shortTime(x.submittedAt||x.createdAt),statusLabel:labels[x.status]||x.status,sizeText:(x.sizeBytes/1048576).toFixed(1)+" MB",avatar:x.driverCode.slice(0,1).toUpperCase()}));const activeAccounts=new Set(items.map(x=>x.driverCode));const users=(u.items||[]).filter(x=>activeAccounts.has(x.account));const selectedUser=users.some(x=>x.account===this.data.selectedUser)?this.data.selectedUser:"";const visible=selectedUser?items.filter(x=>x.driverCode===selectedUser):items;this.setData({packages:visible,visible,users,selectedUser,stats:taskStats(visible),unread:n.unreadCount||0})}catch(e){wx.showToast({title:"读取任务失败",icon:"none"})}},
+  setLibraryMode(e){const libraryMode=e.currentTarget.dataset.mode;this.setData({libraryMode});if(libraryMode==="files")this.loadLibraryFiles()},
+  selectUser(e){this.setData({selectedUser:e.currentTarget.dataset.account||""},()=>{if(this.data.libraryMode==="files")this.loadLibraryFiles();else this.loadPackages()})},
+  fileFilter(e){this.setData({[`fileFilters.${e.currentTarget.dataset.field}`]:e.detail.value});this.loadLibraryFiles()},
+  async loadLibraryFiles(){const f=this.data.fileFilters;const params=Object.keys(f).filter(k=>f[k]).map(k=>`${k}=${encodeURIComponent(f[k])}`);if(this.data.selectedUser)params.push(`driver_id=${encodeURIComponent(this.data.selectedUser)}`);params.push("page_size=100");try{const result=await request(`/assets?${params.join("&")}`);this.setData({libraryFiles:(result.items||[]).map(x=>({...x,dateLabel:x.date_source==="shoot_date"?"拍摄日期":"上传日期",typeLabel:x.media_type==="video"?"视频":x.media_type==="image"?"图片":"文件",uploadText:shortTime(x.uploaded_at)}))})}catch(_){wx.showToast({title:"素材读取失败",icon:"none"})}},
+  search(e){this.setData({query:e.detail.value.trim().toLowerCase()},()=>this.loadPackages())},
+  status(e){this.setData({status:e.currentTarget.dataset.status},()=>this.loadPackages())},
+  async loadPackages(){const params=["page_size=100","sort=newest"];if(this.data.selectedUser)params.push(`driver_id=${encodeURIComponent(this.data.selectedUser)}`);if(this.data.status)params.push(`status=${encodeURIComponent(this.data.status)}`);if(this.data.query)params.push(`query=${encodeURIComponent(this.data.query)}`);try{const p=await request(`/material-packages?${params.join("&")}`);const items=activeTasks(p.items).map(x=>({...x,displayTitle:displayTitle(x.title),dateLabel:x.dateSource==="shoot_date"?"拍摄日期":"上传日期",dateText:x.effectiveDate||x.shootDate,timeText:shortTime(x.submittedAt||x.createdAt),statusLabel:labels[x.status]||x.status,sizeText:(x.sizeBytes/1048576).toFixed(1)+" MB",avatar:x.driverCode.slice(0,1).toUpperCase()}));this.setData({packages:items,visible:items,stats:taskStats(items)})}catch(_){wx.showToast({title:"素材包读取失败",icon:"none"})}},
+  filter(){const {packages,status,query,selectedUser}=this.data;this.setData({visible:packages.filter(x=>(!selectedUser||x.driverCode===selectedUser)&&(!status||x.status===status)&&(!query||`${x.driver}${x.driverCode}${x.title}`.toLowerCase().includes(query)))})},
+  setViewMode(e){const viewMode=e.currentTarget.dataset.mode;if(viewMode==="list"||viewMode==="grid")this.setData({viewMode})},
+  async action(e){const {id,action}=e.currentTarget.dataset;try{const result=await request(`/material-packages/${id}/${action}`,{method:"POST"});const update=item=>item.id===Number(id)?{...item,status:result.status,statusLabel:labels[result.status]||result.status}:item;this.setData({packages:this.data.packages.map(update),visible:this.data.visible.map(update)});wx.showToast({title:result.status==="EDITING"?"已开始剪辑":"已开始修改"});await this.loadPackages()}catch(err){wx.showToast({title:(err.data&&err.data.detail)||"操作失败",icon:"none"})}},
+  async detail(e){try{const item=await request(`/material-packages/${e.currentTarget.dataset.id}`);this.setData({selected:{...item,displayTitle:displayTitle(item.title)}})}catch(_){wx.showToast({title:"详情读取失败",icon:"none"})}},
+  closeDetail(){this.setData({selected:null})},
+  noop(){},
+  downloadAssetFile(asset){
+    return new Promise((resolve,reject)=>wx.downloadFile({
+      url:`${getApp().globalData.apiBase}/assets/${asset.id}/download`,
+      header:{Authorization:`Bearer ${wx.getStorageSync("token")}`},
+      success:r=>r.statusCode===200?resolve(r.tempFilePath):reject(new Error(`HTTP ${r.statusCode}`)),
+      fail:reject
+    }))
   },
-  search(event) { this.setData({ query: event.detail.value.trim().toLowerCase() }, () => this.applyFilters()) },
-  selectDriver(event) { this.setData({ activeDriver: event.currentTarget.dataset.code }, () => this.applyFilters()) },
-  selectSort(event) { this.setData({ sortMode: event.currentTarget.dataset.mode }, () => this.applyFilters()) },
-  applyFilters() {
-    const { query, activeDriver, sortMode } = this.data
-    const filtered = packages.filter(item => (activeDriver === "all" || item.code === activeDriver) && (!query || `${item.driver}${item.code}${item.title}${item.id}`.toLowerCase().includes(query)))
-    this.setData({ visible: sortedPackages(filtered, sortMode) })
+  saveDownloadedFile(filePath,mediaType){
+    return new Promise((resolve,reject)=>{
+      if(mediaType==="image") return wx.saveImageToPhotosAlbum({filePath,success:resolve,fail:reject})
+      if(mediaType==="video") return wx.saveVideoToPhotosAlbum({filePath,success:resolve,fail:reject})
+      wx.openDocument({filePath,showMenu:true,success:resolve,fail:reject})
+    })
   },
-  togglePackage(event) {
-    const id = event.currentTarget.dataset.id
-    this.setData({ expanded: this.data.expanded === id ? "" : id })
+  async downloadAsset(e){
+    const asset=(this.data.selected&&this.data.selected.assets||[]).find(x=>x.id===Number(e.currentTarget.dataset.id))
+    if(!asset)return
+    wx.showLoading({title:"正在下载",mask:true})
+    try{const path=await this.downloadAssetFile(asset);await this.saveDownloadedFile(path,asset.media_type);wx.showToast({title:asset.media_type==="file"?"文件已打开":"已保存到相册"})}
+    catch(_){wx.showToast({title:"下载失败，请检查权限",icon:"none"})}
+    finally{wx.hideLoading()}
   },
-  downloadPackage(event) {
-    const item = packages.find(pkg => pkg.id === event.currentTarget.dataset.id)
-    wx.showToast({ title: `准备下载${item.driver}的全部素材`, icon: "none" })
-  }
+  async downloadLibraryAsset(e){const asset=this.data.libraryFiles.find(x=>x.id===Number(e.currentTarget.dataset.id));if(!asset)return;wx.showLoading({title:"正在下载",mask:true});try{const path=await this.downloadAssetFile(asset);await this.saveDownloadedFile(path,asset.media_type);wx.showToast({title:asset.media_type==="file"?"文件已打开":"已保存到相册"})}catch(_){wx.showToast({title:"无法直接保存，请检查权限",icon:"none"})}finally{wx.hideLoading()}},
+  async downloadAll(){
+    const assets=(this.data.selected&&this.data.selected.assets)||[]
+    if(!assets.length){wx.showToast({title:"素材包为空",icon:"none"});return}
+    let completed=0
+    try{
+      for(const asset of assets){wx.showLoading({title:`下载 ${completed+1}/${assets.length}`,mask:true});const path=await this.downloadAssetFile(asset);await this.saveDownloadedFile(path,asset.media_type);completed+=1}
+      wx.showToast({title:`已保存 ${completed} 个素材`})
+    }catch(_){wx.showToast({title:`已保存 ${completed} 个，其余下载失败`,icon:"none"})}
+    finally{wx.hideLoading()}
+  },
+  uploadProduct(e){const item=this.data.packages.find(x=>x.id===Number(e.currentTarget.dataset.id));if(!item)return;wx.showModal({title:"回传成品",content:`回传给：${item.driverCode}（不可修改）\n素材包：${item.displayTitle}`,confirmText:"选择视频",success:choice=>{if(!choice.confirm)return;wx.chooseMedia({count:1,mediaType:["video"],sizeType:["original"],success:r=>{wx.showLoading({title:"正在上传",mask:true});wx.uploadFile({url:`${getApp().globalData.apiBase}/finished-products/upload`,filePath:r.tempFiles[0].tempFilePath,name:"file",header:{Authorization:`Bearer ${wx.getStorageSync("token")}`},formData:{package_id:String(item.id),title:item.title},success:response=>{let data={};try{data=JSON.parse(response.data)}catch(_){}if(response.statusCode<400){wx.showModal({title:"回传成功",content:`已回传给：${data.ownerAccount}\n版本：V${data.versionNumber}`,showCancel:false});this.load()}else wx.showToast({title:data.detail||"上传失败，请重试",icon:"none"})},fail:()=>wx.showToast({title:"上传失败，请检查网络",icon:"none"}),complete:()=>wx.hideLoading()})}})}})}
 })

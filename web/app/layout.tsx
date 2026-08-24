@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Daitora Vlog Box｜大寅素材往返箱",
-  description: "司机上传素材、剪辑师批量回传候选成品的协作中心。",
+  description: "上传用户提交素材、剪辑师处理并回传成品的协作中心。",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

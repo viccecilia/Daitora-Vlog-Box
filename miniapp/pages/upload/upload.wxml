@@ -1,1 +1,78 @@
-<view class="page"><view class="title">上传素材</view><view class="muted">视频和照片将追加到当前司机的素材包，并自动记录类型、大小和上传时间。</view><view class="card picker" bindtap="chooseFiles"><view class="plus">＋</view><view class="pick-title">从相册选择照片或视频</view><view class="muted">支持多选，单个文件暂限 200 MB</view></view><view wx:for="{{files}}" wx:key="path" class="card file"><view class="row between"><text>{{item.name}}</text><text>{{item.status}} · {{item.progress}}%</text></view><view class="bar"><view style="width:{{item.progress}}%"></view></view></view><button class="primary submit" loading="{{uploading}}" disabled="{{uploading}}" bindtap="submit">{{uploading ? '正在上传' : '开始上传'}}</button></view>
+<view class="page">
+  <view class="upload-header">
+    <view class="title">创建素材包</view>
+    <view class="muted">填写拍摄信息，添加素材后即可上传。</view>
+  </view>
+
+  <view class="card package-form">
+    <picker mode="date" value="{{shootDate}}" bindchange="setDate"><view class="form-row"><text class="form-label">拍摄日期</text><text class="form-value">{{shootDate || '请选择'}}　›</text></view></picker>
+    <picker range="{{themes}}" bindchange="setTheme"><view class="form-row"><text class="form-label">拍摄主题</text><text class="form-value">{{theme}}　›</text></view></picker>
+    <view class="form-row title-row"><text class="form-label">素材包名称</text><input placeholder="留空则自动生成" value="{{title}}" bindinput="setTitle" /></view>
+  </view>
+
+  <view class="card picker">
+    <view class="picker-heading"><view class="plus">＋</view><view><view class="pick-title">添加素材</view><view class="muted picker-subtitle">支持照片和原画质视频</view></view></view>
+    <view class="source-actions">
+      <button class="source-button primary" bindtap="chooseAlbum">相册选择</button>
+      <button class="source-button ghost" bindtap="chooseCamera">拍摄</button>
+      <button class="source-button ghost" bindtap="chooseWechatFiles">聊天文件</button>
+    </view>
+    <view class="source-help">可分多次追加，视频保持原画质上传</view>
+  </view>
+
+  <view class="material-toolbar">
+    <view class="material-summary"><view class="section-title">本次素材</view><view class="muted">共 {{files.length}} 个 · 待处理 {{pendingCount}} · 已上传 {{completedCount}}</view></view>
+    <view class="view-switch"><button class="{{viewMode === 'list' ? 'active' : ''}}" data-mode="list" bindtap="setViewMode">列表</button><button class="{{viewMode === 'grid' ? 'active' : ''}}" data-mode="grid" bindtap="setViewMode">平铺</button></view>
+  </view>
+
+  <view wx:if="{{pendingCount}}" class="material-section">
+    <view class="section-heading"><text>待上传 / 上传中</text><text class="count-chip">{{pendingCount}}</text></view>
+    <view class="materials {{viewMode}}">
+      <block wx:for="{{files}}" wx:key="path">
+        <view wx:if="{{item.status !== '已完成'}}" class="card file material-card">
+          <view class="material-layout">
+            <image wx:if="{{item.mediaType === 'image'}}" class="media-preview" src="{{item.thumbPath || item.path}}" mode="aspectFill" data-src="{{item.path}}" bindtap="previewImage"/>
+            <video wx:elif="{{item.mediaType === 'video'}}" class="media-preview" src="{{item.path}}" poster="{{item.thumbPath}}" controls="{{true}}" show-center-play-btn="{{true}}" object-fit="cover"/>
+            <view wx:else class="file-preview">文件</view>
+            <view class="material-content">
+              <view class="row between file-heading"><text class="file-name">{{item.name}}</text><text class="status pending-status">{{item.status}}</text></view>
+              <view class="metadata"><text class="type-chip">{{item.typeLabel}}</text><text>{{item.selectedAt}}</text><text>{{item.sizeText}}</text><text>{{item.progress}}%</text></view>
+              <input class="memo-input" placeholder="备注：这个素材拍了什么？" value="{{item.memoText}}" data-i="{{index}}" bindinput="memoInput"/>
+              <view class="memo-actions"><button size="mini" data-i="{{index}}" bindtap="replaceFile">更换</button><button size="mini" data-i="{{index}}" bindtap="removeFile">删除</button></view>
+            </view>
+          </view>
+          <view class="bar"><view style="width:{{item.progress}}%"></view></view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view wx:if="{{completedCount}}" class="material-section completed-section">
+    <view class="section-heading completed-heading"><text>已上传</text><text class="count-chip completed-chip">{{completedCount}}</text></view>
+    <view class="section-note">已上传的素材单独保存在这里。提交给剪辑师前仍可预览、更换或删除。</view>
+    <view class="materials {{viewMode}}">
+      <block wx:for="{{files}}" wx:key="path">
+        <view wx:if="{{item.status === '已完成'}}" class="card file material-card completed-card">
+          <view class="material-layout">
+            <image wx:if="{{item.mediaType === 'image'}}" class="media-preview" src="{{item.thumbPath || item.path}}" mode="aspectFill" data-src="{{item.path}}" bindtap="previewImage"/>
+            <video wx:elif="{{item.mediaType === 'video'}}" class="media-preview" src="{{item.path}}" poster="{{item.thumbPath}}" controls="{{true}}" show-center-play-btn="{{true}}" object-fit="cover"/>
+            <view wx:else class="file-preview">文件</view>
+            <view class="material-content">
+              <view class="row between file-heading"><text class="file-name">{{item.name}}</text><text class="status completed-status">✓ 已上传</text></view>
+              <view class="metadata"><text class="type-chip">{{item.typeLabel}}</text><text>{{item.uploadedAt || item.selectedAt}}</text><text>{{item.sizeText}}</text><text>100%</text></view>
+              <input class="memo-input" placeholder="备注：这个素材拍了什么？" value="{{item.memoText}}" data-i="{{index}}" bindinput="memoInput"/>
+              <view class="memo-actions"><button size="mini" data-i="{{index}}" bindtap="replaceFile">更换</button><button size="mini" data-i="{{index}}" bindtap="removeFile">删除</button></view>
+            </view>
+          </view>
+          <view class="bar completed-bar"><view style="width:100%"></view></view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view wx:if="{{!files.length}}" class="empty-materials">尚未添加素材</view>
+  <view class="submit-panel">
+    <button class="primary submit" loading="{{uploading}}" disabled="{{uploading}}" bindtap="uploadAll">{{uploading ? '正在上传' : '上传素材'}}</button>
+    <button class="secondary submit" disabled="{{uploading}}" bindtap="submitPackage">提交给剪辑师</button>
+  </view>
+</view>

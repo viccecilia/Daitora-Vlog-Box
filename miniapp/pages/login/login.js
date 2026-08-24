@@ -19,13 +19,17 @@ Page({
     try {
       const result = await request("/auth/login", { method: "POST", data: { account, password } })
       const app = getApp()
-      app.globalData.role = result.user.role
-      app.globalData.user = result.user
       wx.setStorageSync("token", result.token)
-      wx.setStorageSync("role", result.user.role)
-      wx.setStorageSync("user", result.user)
-      wx.reLaunch({ url: result.user.role === "driver" ? "/pages/home/home" : "/pages/editor/editor" })
+      const profile = await request("/me")
+      app.globalData.role = profile.role
+      app.globalData.user = profile
+      wx.setStorageSync("role", profile.role)
+      wx.setStorageSync("user", profile)
+      wx.reLaunch({ url: profile.role === "driver" ? "/pages/home/home" : "/pages/editor/editor" })
     } catch (error) {
+      wx.removeStorageSync("token")
+      wx.removeStorageSync("role")
+      wx.removeStorageSync("user")
       const message = error && error.data && error.data.detail ? error.data.detail : "登录失败，请检查网络后重试"
       wx.showToast({ title: message, icon: "none" })
       this.setData({ loading: false })

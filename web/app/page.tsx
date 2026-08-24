@@ -1,44 +1,47 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   downloadAsset,
-  loadAssetPackages,
+  downloadFinishedProduct,
+  downloadPackage,
+  loadLibraryAssets,
+  loadLatestFinishedProduct,
+  loadAssetPreviewUrl,
+  loadMaterialPackages,
+  loadMe,
+  loadFinishedProducts,
+  loadRevisions,
+  loadUploadUsers,
+  loadAdminOverview,
+  loadAdminAccounts,
+  createAdminAccount,
+  updateAdminAccount,
+  resetAdminPassword,
+  revokeAdminSessions,
+  loadAdminAnomalies,
+  loadAdminStorage,
+  loadAuditLogs,
+  uploadFinishedProduct,
+  transitionPackage,
   login as apiLogin,
-  previewAsset,
-  uploadAsset,
-  type DriverAssetPackage,
+  updateProfile,
+  type LibraryAsset,
+  type FinishedProduct,
   type Session,
+  type MaterialPackage,
+  type AdminAccount,
+  type AdminOverview,
+  type AdminAnomaly,
+  type AdminStorage,
 } from "./api";
 type Mode = "driver" | "editor";
-const versions = [
-  {
-    id: "A",
-    title: "节奏明快版",
-    duration: "00:42",
-    note: "适合小红书 / 视频号",
-    color: "#ff6b45",
-  },
-  {
-    id: "B",
-    title: "日常叙事版",
-    duration: "00:58",
-    note: "保留更多工作细节",
-    color: "#2767e8",
-  },
-  {
-    id: "C",
-    title: "精简竖屏版",
-    duration: "00:31",
-    note: "适合短视频开场测试",
-    color: "#7257d9",
-  },
-];
+type Cover = { id: string; title: string; duration: string; note: string; color: string };
 function BrandMark() {
   return <span className="brand-mark">D</span>;
 }
 function LoginScreen({ enter }: { enter: (session: Session) => void }) {
-  const [user, setUser] = useState("admin");
-  const [password, setPassword] = useState("Daitora1028");
+  const [user, setUser] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function login(event: React.FormEvent) {
@@ -59,14 +62,14 @@ function LoginScreen({ enter }: { enter: (session: Session) => void }) {
         <div className="brand login-brand"><BrandMark/><div><strong>Daitora</strong><span>VLOG BOX</span></div></div>
         <div className="login-kicker">企业影像素材库</div>
         <h1>登录工作台</h1>
-        <p>剪辑师与管理员使用网页端；司机日常上传建议使用微信小程序。</p>
+        <p>剪辑师与管理员使用网页端；日常素材上传建议使用微信小程序。</p>
         <form onSubmit={login}>
-          <label>账号<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
-          <label>密码<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+          <label>账号<input placeholder="输入用户名" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
+          <label>密码<input placeholder="输入密码" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
           {error && <div className="login-error">{error}</div>}
           <button className="login-submit" type="submit" disabled={busy}>{busy ? "正在验证…" : "登录工作台"}</button>
         </form>
-        <small>系统会根据账号角色自动进入司机端、剪辑师端或管理端。</small>
+        <small>系统会根据账号权限自动进入对应工作台。</small>
       </section>
     </main>
   );
@@ -81,12 +84,30 @@ export default function Home() {
   });
   const mode: Mode = session?.user.role === "driver" ? "driver" : "editor";
   const [toast, setToast] = useState<string | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showRevision, setShowRevision] = useState(false);
-  function notify(m: string) {
+  const [showProfile, setShowProfile] = useState(false);
+  const notify = useCallback((m: string) => {
     setToast(m);
     window.setTimeout(() => setToast(null), 2600);
-  }
+  }, []);
+  useEffect(() => {
+    if (!session?.token) return;
+    loadMe(session.token).then(user => {
+      setSession(current => {
+        if (!current) return current;
+        const next = { ...current, user };
+        localStorage.setItem("daitora-session", JSON.stringify(next));
+        return next;
+      });
+    }).catch(() => {
+      localStorage.removeItem("daitora-session");
+      setSession(null);
+    });
+  }, [session?.token]);
+  useEffect(() => {
+    if (!session) return;
+    const target = session.user.role === "admin" ? "/admin" : "/";
+    if (window.location.pathname !== target) window.history.replaceState({}, "", target);
+  }, [session]);
   if (!session) return <LoginScreen enter={(next) => { localStorage.setItem("daitora-session", JSON.stringify(next)); setSession(next); }} />;
   return (
     <main className="app-shell">
@@ -98,39 +119,37 @@ export default function Home() {
             <span>VLOG BOX</span>
           </div>
         </div>
-        <div className="mode-switch"><button className="active">{mode === "driver" ? "司机端" : session.user.role === "admin" ? "管理端" : "剪辑师端"}</button></div>
+        <div className="mode-switch"><button className="active">{mode === "driver" ? "素材中心" : session.user.role === "admin" ? "管理端" : "剪辑工作台"}</button></div>
         <div className="profile">
           <span className="avatar">{session.user.name[0]}</span>
           <div>
             <strong>{session.user.name}</strong>
+            {mode === "driver" && <button className="logout-button" onClick={() => setShowProfile(true)}>我的资料</button>}
             <button className="logout-button" onClick={() => { localStorage.removeItem("daitora-session"); setSession(null); }}>退出登录</button>
           </div>
         </div>
       </header>
-      {mode === "driver" ? (
+      {session.user.role === "admin" ? (
+        <AdminView session={session} notify={notify} />
+      ) : mode === "driver" ? (
         <DriverView
-          onUpload={() => setShowUpload(true)}
-          onRevise={() => setShowRevision(true)}
+          session={session}
+          onProfile={() => setShowProfile(true)}
           notify={notify}
         />
       ) : (
         <EditorView notify={notify} session={session} />
       )}{" "}
-      {showUpload && (
-        <UploadPanel
-          close={() => setShowUpload(false)}
-          done={() => {
-            setShowUpload(false);
-            notify("素材已放入统一素材夹，剪辑师将收到通知");
-          }}
-        />
-      )}
-      {showRevision && (
-        <RevisionModal
-          close={() => setShowRevision(false)}
-          done={() => {
-            setShowRevision(false);
-            notify("修改要求已提交，剪辑师将收到通知");
+      {showProfile && (
+        <ProfileModal
+          session={session}
+          close={() => setShowProfile(false)}
+          saved={(user) => {
+            const next = { ...session, user };
+            localStorage.setItem("daitora-session", JSON.stringify(next));
+            setSession(next);
+            setShowProfile(false);
+            notify("姓名已更新");
           }}
         />
       )}
@@ -143,26 +162,71 @@ export default function Home() {
     </main>
   );
 }
+type AdminPanel = "overview" | "accounts" | "content" | "anomalies" | "logs" | "storage";
+function AdminView({session,notify}:{session:Session;notify:(message:string)=>void}) {
+  const [panel,setPanel]=useState<AdminPanel>("overview");
+  const labels:Array<[AdminPanel,string]>=[["overview","概览"],["accounts","账号管理"],["content","素材与成品"],["anomalies","异常任务"],["logs","操作记录"],["storage","存储与备份"]];
+  return <div className="admin-layout"><aside className="admin-sidebar"><div><span className="kicker">ADMIN</span><h2>管理端</h2></div>{labels.map(([key,label])=><button key={key} className={panel===key?"active":""} onClick={()=>setPanel(key)}>{label}</button>)}</aside><section className="admin-main">
+    {panel==="overview"&&<AdminOverviewPanel token={session.token} notify={notify}/>}
+    {panel==="accounts"&&<AdminAccountsPanel session={session} notify={notify}/>}
+    {panel==="content"&&<AdminContentPanel token={session.token} notify={notify}/>}
+    {panel==="anomalies"&&<AdminAnomaliesPanel token={session.token} notify={notify}/>}
+    {panel==="logs"&&<AdminLogsPanel token={session.token} notify={notify}/>}
+    {panel==="storage"&&<AdminStoragePanel token={session.token} notify={notify}/>}
+  </section></div>;
+}
+function AdminHeading({title,note,action}:{title:string;note:string;action?:React.ReactNode}){return <div className="admin-heading"><div><span className="kicker">Daitora Vlog Box</span><h1>{title}</h1><p>{note}</p></div>{action}</div>}
+function AdminOverviewPanel({token,notify}:{token:string;notify:(m:string)=>void}){
+  const [data,setData]=useState<AdminOverview|null>(null);const [error,setError]=useState("");
+  useEffect(()=>{loadAdminOverview(token).then(setData).catch(e=>{setError(e.message);notify(e.message)})},[token,notify]);
+  return <><AdminHeading title="概览" note="仅显示来自生产数据库的实时口径。"/>{error&&<div className="data-state error">{error}</div>}{!data?<div className="data-state">正在读取…</div>:<div className="admin-summary"><div><span>账号</span><strong>{data.activeAccounts}/{data.accounts}</strong></div><div><span>素材包</span><strong>{data.packages}</strong></div><div><span>素材文件</span><strong>{data.assets}</strong></div><div><span>成品</span><strong>{data.products}</strong></div><div><span>上传异常</span><strong>{data.uploadExceptions}</strong></div></div>}</>;
+}
+function AdminAccountsPanel({session,notify}:{session:Session;notify:(m:string)=>void}){
+  const [items,setItems]=useState<AdminAccount[]>([]);const [query,setQuery]=useState("");const [role,setRole]=useState("");const [status,setStatus]=useState("");const [loading,setLoading]=useState(true);
+  const refresh=useCallback(async()=>{setLoading(true);try{const result=await loadAdminAccounts(session.token,{...(query?{query}:{}),...(role?{role}:{}),...(status?{status}:{})});setItems(result.items)}catch(e){notify(e instanceof Error?e.message:"账号读取失败")}finally{setLoading(false)}},[session.token,query,role,status,notify]);
+  useEffect(()=>{loadAdminAccounts(session.token,{...(query?{query}:{}),...(role?{role}:{}),...(status?{status}:{})}).then(result=>setItems(result.items)).catch(e=>notify(e.message)).finally(()=>setLoading(false))},[session.token,query,role,status,notify]);
+  async function create(){const account=window.prompt("输入新账号");if(!account)return;const displayName=window.prompt("输入显示名称");if(!displayName)return;const choices=session.user.isSuperAdmin?"UPLOADER / EDITOR / ADMIN":"UPLOADER / EDITOR";const selected=window.prompt(`输入角色：${choices}`,"UPLOADER")?.toUpperCase();if(!selected)return;if(!window.confirm(`确认创建 ${account}（${selected}）？`))return;try{const result=await createAdminAccount(session.token,{account,displayName,role:selected});window.alert(`临时密码（仅显示一次）：${result.temporaryPassword}`);await refresh()}catch(e){notify(e instanceof Error?e.message:"创建失败")}}
+  async function rename(item:AdminAccount){const displayName=window.prompt("输入新的显示名称",item.displayName);if(!displayName||displayName===item.displayName)return;if(!window.confirm(`确认修改 ${item.account} 的显示名称？`))return;try{await updateAdminAccount(session.token,item.id,{displayName});await refresh()}catch(e){notify(e instanceof Error?e.message:"修改失败")}}
+  async function toggle(item:AdminAccount){if(!window.confirm(`确认${item.active?"停用":"启用"}账号 ${item.account}？历史数据不会删除。`))return;try{await updateAdminAccount(session.token,item.id,{active:!item.active});await refresh()}catch(e){notify(e instanceof Error?e.message:"状态修改失败")}}
+  async function reset(item:AdminAccount){if(!window.confirm(`确认重置 ${item.account} 的密码并撤销现有会话？`))return;try{const result=await resetAdminPassword(session.token,item.id);window.alert(`临时密码（仅显示一次）：${result.temporaryPassword}`);await refresh()}catch(e){notify(e instanceof Error?e.message:"重置失败")}}
+  async function revoke(item:AdminAccount){if(!window.confirm(`确认强制退出 ${item.account}？`))return;try{const result=await revokeAdminSessions(session.token,item.id);notify(`已撤销 ${result.revokedSessions} 个会话`)}catch(e){notify(e instanceof Error?e.message:"撤销失败")}}
+  return <><AdminHeading title="账号管理" note="停用账号不会删除其素材、成品或历史归属。" action={<button className="solid-button" onClick={()=>void create()}>新增账号</button>}/><div className="admin-filters"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索账号或显示名"/><select value={role} onChange={e=>setRole(e.target.value)}><option value="">全部角色</option><option value="UPLOADER">上传用户</option><option value="EDITOR">剪辑师</option><option value="ADMIN">管理员</option></select><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">全部状态</option><option value="active">启用</option><option value="disabled">停用</option></select></div>{loading?<div className="data-state">正在读取账号…</div>:<div className="admin-table"><div className="admin-table-head"><span>账号 / 显示名</span><span>角色</span><span>状态</span><span>最后登录</span><span>素材 / 成品</span><span>操作</span></div>{items.map(item=><div className="admin-table-row" key={item.id}><span><strong>{item.displayName}</strong><small>{item.account}</small></span><span>{item.isSuperAdmin?"超级管理员":item.role==="UPLOADER"?"上传用户":item.role==="EDITOR"?"剪辑师":"管理员"}</span><span>{item.active?"启用":"停用"}{item.mustChangePassword&&<small>首次登录需改密</small>}</span><span>{formatTime(item.lastLoginAt)}</span><span>{item.assetCount} / {item.productCount}</span><span className="admin-row-actions"><button onClick={()=>void rename(item)}>改名</button><button onClick={()=>void toggle(item)}>{item.active?"停用":"启用"}</button><button onClick={()=>void reset(item)}>重置密码</button><button onClick={()=>void revoke(item)}>强制退出</button></span></div>)}</div>}</>;
+}
+function AdminContentPanel({token,notify}:{token:string;notify:(m:string)=>void}){
+  const [packages,setPackages]=useState<MaterialPackage[]>([]);const [products,setProducts]=useState<FinishedProduct[]>([]);const [query,setQuery]=useState("");
+  useEffect(()=>{Promise.all([loadMaterialPackages(token,{query,sort:"newest",page_size:"100"}),loadFinishedProducts(token,query)]).then(([p,f])=>{setPackages(p.items);setProducts(f.items)}).catch(e=>notify(e.message))},[token,query,notify]);
+  return <><AdminHeading title="素材与成品" note="默认只读；素材包、上传账号与成品绑定关系来自服务器。"/><div className="admin-filters"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索账号或素材包"/></div><h2 className="admin-section-title">素材包</h2><div className="admin-table"><div className="admin-table-head compact"><span>素材包</span><span>上传账号</span><span>状态</span><span>文件</span></div>{packages.map(item=><div className="admin-table-row compact" key={item.id}><span><strong>{item.title}</strong><small>{item.effectiveDate}</small></span><span>{item.driver}<small>{item.driverCode}</small></span><span>{item.status}</span><span>{item.fileCount}</span></div>)}</div><h2 className="admin-section-title">成品</h2><div className="admin-table"><div className="admin-table-head compact"><span>成品</span><span>所属素材包</span><span>接收账号</span><span>版本</span></div>{products.map(item=><div className="admin-table-row compact" key={item.id}><span>{item.title}</span><span>{item.packageTitle||"—"}</span><span>{item.driver}<small>{item.driverCode}</small></span><span>V{item.versionNumber||1}</span></div>)}</div></>;
+}
+function AdminAnomaliesPanel({token,notify}:{token:string;notify:(m:string)=>void}){const [items,setItems]=useState<AdminAnomaly[]>([]);const [unowned,setUnowned]=useState(0);useEffect(()=>{loadAdminAnomalies(token).then(r=>{setItems(r.items);setUnowned(r.unownedAssets)}).catch(e=>notify(e.message))},[token,notify]);return <><AdminHeading title="异常任务" note="只列出需要人工关注的真实任务；恢复操作将在确认根因后进行。"/><div className="data-state">无归属文件：{unowned}</div><div className="admin-table"><div className="admin-table-head compact"><span>任务</span><span>账号</span><span>异常</span><span>更新时间</span></div>{items.map(item=><div className="admin-table-row compact" key={item.id}><span>{item.title}</span><span>{item.display_name}<small>{item.account}</small></span><span>{item.anomaly}</span><span>{formatTime(item.updated_at)}</span></div>)}</div>{!items.length&&<div className="data-state">当前没有异常任务。</div>}</>}
+function AdminLogsPanel({token,notify}:{token:string;notify:(m:string)=>void}){const [items,setItems]=useState<Array<{id:number;action:string;object_type:string;object_id:number|null;detail:string;created_at:string;account:string;actor:string;result?:string;ip_address?:string}>>([]);const [query,setQuery]=useState("");useEffect(()=>{loadAuditLogs(token,query).then(r=>setItems(r.items)).catch(e=>notify(e.message))},[token,query,notify]);return <><AdminHeading title="操作记录" note="登录、账号管理、上传下载和工作流操作均来自审计表。"/><div className="admin-filters"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索操作者或详情"/></div><div className="admin-table"><div className="admin-table-head compact"><span>时间</span><span>操作者</span><span>动作</span><span>对象 / 结果</span></div>{items.map(item=><div className="admin-table-row compact" key={item.id}><span>{formatTime(item.created_at)}</span><span>{item.actor}<small>{item.account}</small></span><span>{item.action}</span><span>{item.object_type} #{item.object_id||"—"}<small>{item.result||"success"} · {item.detail||"—"}</small></span></div>)}</div></>}
+function AdminStoragePanel({token,notify}:{token:string;notify:(m:string)=>void}){const [data,setData]=useState<AdminStorage|null>(null);useEffect(()=>{loadAdminStorage(token).then(setData).catch(e=>notify(e.message))},[token,notify]);return <><AdminHeading title="存储与备份" note="容量来自服务器磁盘；没有备份记录时明确显示未记录。"/>{!data?<div className="data-state">正在读取…</div>:<><div className={`storage-meter ${data.thresholdLevel}`}><strong>{data.usedPercent}%</strong><span>已用 {formatBytes(data.usedBytes)} / {formatBytes(data.totalBytes)} · 剩余 {formatBytes(data.freeBytes)}</span></div><h2 className="admin-section-title">按账号占用</h2><div className="admin-table"><div className="admin-table-head compact"><span>显示名</span><span>账号</span><span>占用</span><span></span></div>{data.byAccount.map(item=><div className="admin-table-row compact" key={item.account}><span>{item.display_name}</span><span>{item.account}</span><span>{formatBytes(item.size_bytes)}</span><span></span></div>)}</div><div className="backup-state"><strong>最近备份</strong>{data.latestBackup?<span>{data.latestBackup.status} · {formatTime(data.latestBackup.finished_at||data.latestBackup.started_at)}</span>:<span>系统尚未记录可验证的备份运行结果</span>}</div></>}</>}
 function DriverView({
-  onUpload,
-  onRevise,
+  session,
+  onProfile,
   notify,
 }: {
-  onUpload: () => void;
-  onRevise: () => void;
+  session: Session;
+  onProfile: () => void;
   notify: (m: string) => void;
 }) {
-  const current = versions[1];
+  const [product, setProduct] = useState<FinishedProduct | null>(null);
+  const [productLoading, setProductLoading] = useState(true);
+  useEffect(() => {
+    loadLatestFinishedProduct(session.token)
+      .then((result) => setProduct(result.item))
+      .catch((reason) => notify(reason instanceof Error ? reason.message : "成品读取失败"))
+      .finally(() => setProductLoading(false));
+  }, [session.token, notify]);
   return (
     <div className="driver-layout">
       <section className="driver-hero">
         <div className="eyebrow">
-          <span className="live-dot" /> 今天 · 2026年8月15日
+          <span className="live-dot" /> 今日素材
         </div>
-        <h1>王师傅，今天拍了什么？</h1>
+        <h1>{session.user.name}，今天拍了什么？</h1>
         <p>把视频传上来，剩下的交给剪辑师。</p>
         <div className="primary-actions">
-          <button className="upload-action" onClick={onUpload}>
+          <button className="upload-action" onClick={() => notify("请在微信小程序中上传原始素材") }>
             <span className="action-icon">↑</span>
             <span>
               <strong>上传素材</strong>
@@ -181,33 +245,10 @@ function DriverView({
             <span className="action-icon">↓</span>
             <span>
               <strong>查看成品</strong>
-              <small>1 个最新成品等待确认</small>
+              <small>{product ? "1 个最新成品等待确认" : "暂无新成品"}</small>
             </span>
             <b>›</b>
           </button>
-        </div>
-      </section>
-      <section className="status-strip">
-        <div>
-          <span className="status-number coral">8</span>
-          <p>
-            <strong>已上传素材</strong>
-            <small>今天新增</small>
-          </p>
-        </div>
-        <div>
-          <span className="status-number blue">1</span>
-          <p>
-            <strong>成品待确认</strong>
-            <small>当前最新版</small>
-          </p>
-        </div>
-        <div>
-          <span className="status-number green">7</span>
-          <p>
-            <strong>本月完成</strong>
-            <small>已确认视频</small>
-          </p>
         </div>
       </section>
       <section className="content-section" id="versions">
@@ -215,60 +256,81 @@ function DriverView({
           <div>
             <span className="kicker">成品夹 · 最新回传</span>
             <h2>你的最新成品</h2>
-            <p>司机端只显示当前版本；历史版本由后台保存。</p>
+            <p>当前账号只显示最新版本；历史版本由后台保存。</p>
           </div>
-          <span className="pill pending">V1 · 待确认</span>
+          {product && <span className="pill pending">V{product.versionNumber || 1} · 待确认</span>}
         </div>
-        <article className="driver-finished">
-          <VideoCover version={current} />
+        {productLoading && <div className="data-state">正在读取最新成品…</div>}
+        {!productLoading && !product && <div className="finished-empty"><strong>暂时没有新成品</strong><span>剪辑师回传后会显示在这里。</span></div>}
+        {product && <article className="driver-finished">
+          <VideoCover version={{ id: String(product.id), title: product.title, duration: "视频", note: product.originalName, color: "#2767e8" }} />
           <div>
-            <span className="kicker">08-15 11:08 回传</span>
-            <h3>大寅司机的一天</h3>
-            <p>时长 {current.duration} · 竖屏 9:16 · 108 MB</p>
+            <span className="kicker">最新回传</span>
+            <h3>{product.title}</h3>
+            <p>{product.originalName} · {(product.sizeBytes / 1024 / 1024).toFixed(1)} MB</p>
             <div>
-              <button className="ghost-button" onClick={onRevise}>
+              <button className="ghost-button" onClick={() => notify("请在微信小程序中提交时间点和修改内容") }>
                 提出修改
               </button>
               <button
                 className="solid-button"
-                onClick={() => notify("成品已确认完成")}
+                onClick={() => void downloadFinishedProduct(session.token, product).catch((reason) => notify(reason.message))}
               >
-                确认完成
+                下载成品
               </button>
             </div>
           </div>
-        </article>
+        </article>}
       </section>
-      <nav className="mobile-nav">
-        <button className="active">
-          ⌂<span>首页</span>
-        </button>
-        <button>
-          ◉<span>消息</span>
-          <i />
-        </button>
-        <button>
-          ♙<span>我的</span>
-        </button>
-      </nav>
+      <nav className="mobile-nav"><button onClick={onProfile}>♙<span>我的资料</span></button></nav>
     </div>
   );
 }
-function VideoCover({ version }: { version: (typeof versions)[number] }) {
+
+function ProfileModal({ session, close, saved }: { session: Session; close: () => void; saved: (user: Session["user"]) => void }) {
+  const [name, setName] = useState(session.user.name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      saved(await updateProfile(session.token, name));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "保存失败");
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop"><form className="modal" onSubmit={submit}>
+      <button className="modal-close" type="button" onClick={close}>×</button>
+      <span className="kicker">我的资料</span><h2>修改姓名</h2>
+      <label className="field-label">用户名</label>
+      <input value={session.user.id} disabled />
+      <label className="field-label">显示姓名</label>
+      <input value={name} onChange={(event) => setName(event.target.value)} maxLength={30} placeholder="输入姓名" />
+      {error && <div className="data-state error">{error}</div>}
+      <div className="modal-actions"><button className="ghost-button" type="button" onClick={close}>取消</button><button className="solid-button" disabled={busy}>{busy ? "保存中…" : "保存资料"}</button></div>
+    </form></div>
+  );
+}
+function VideoCover({ version }: { version: Cover }) {
   return (
     <div
-      className={`video-cover cover-photo cover-${version.id.toLowerCase()}`}
+      className="video-cover finished-product-cover"
       style={{ "--cover": version.color } as React.CSSProperties}
     >
-      <span className="version-label">方案 {version.id}</span>
-      <button aria-label={`播放方案${version.id}`}>▶</button>
+      <span className="version-label">成品</span>
+      <span className="finished-product-play" aria-hidden="true">▶</span>
+      <strong>{version.title}</strong>
       <time>{version.duration}</time>
     </div>
   );
 }
 function EditorView({ notify, session }: { notify: (m: string) => void; session: Session }) {
   const [panel, setPanel] = useState("assets");
-  const [uploadOpen, setUploadOpen] = useState(false);
   const menu = (id: string, icon: string, label: string, count?: string) => (
     <button
       className={panel === id ? "active" : ""}
@@ -282,227 +344,80 @@ function EditorView({ notify, session }: { notify: (m: string) => void; session:
   return (
     <div className="editor-layout">
       <aside className="sidebar">
-        <div className="sidebar-label">文件空间</div>
-        {menu("assets", "▦", "素材夹")}
-        {menu("finished", "▱", "成品夹", "开发中")}
-        <div className="sidebar-label lower">管理</div>
-        {menu("drivers", "♙", "司机管理")}
-        {menu("stats", "▥", "剪辑统计")}
-        {menu("logs", "◌", "操作记录")}
-        <div className="storage-card">
-          <p>
-            <span>存储空间</span>
-            <strong>VPS</strong>
-          </p>
-          <div>
-            <i />
-          </div>
-          <small>容量监控将在下一批接入</small>
-        </div>
+        <div className="sidebar-label">剪辑工作</div>
+        {menu("assets", "▦", "待处理")}
+        {menu("materials", "▤", "素材库 / 任务详情")}
+        {menu("finished", "▱", "成品记录")}
       </aside>
       <section className="editor-main">
         {panel === "assets" && (
-          <AssetsPanel
+          <TaskBoard notify={notify} session={session} />
+        )}
+        {panel === "materials" && <AssetsPanel notify={notify} session={session} />}
+        {panel === "finished" && (
+          <FinishedFolder
             notify={notify}
             session={session}
           />
         )}
-        {panel === "finished" && (
-          <FinishedFolder
-            onUpload={() => setUploadOpen(true)}
-            notify={notify}
-          />
-        )}
-        {panel === "drivers" && <DriversPanel notify={notify} />}
-        {panel === "stats" && <StatsPanel />}
-        {panel === "logs" && <LogsPanel />}
       </section>
-      {uploadOpen && (
-        <BatchVersionModal
-          close={() => setUploadOpen(false)}
-          done={() => {
-            setUploadOpen(false);
-            notify("最新成品已回传并通知王小明");
-          }}
-        />
-      )}
     </div>
   );
 }
 
-function AssetsPanel({
-  notify,
-  session,
-}: {
-  notify: (m: string) => void;
-  session: Session;
-}) {
-  const [packages, setPackages] = useState<DriverAssetPackage[]>([]);
-  const [type, setType] = useState("全部");
-  const [driverQuery, setDriverQuery] = useState("");
-  const [sort, setSort] = useState<"time" | "type">("time");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [targetDriver, setTargetDriver] = useState("");
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await loadAssetPackages(session.token, sort);
-      setPackages(result.items);
-      setTargetDriver((current) => current || result.items[0]?.code || "");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "素材读取失败");
-    } finally {
-      setLoading(false);
-    }
-  }
-  // Loading remote data is the synchronization performed by this effect.
+const statusText: Record<string,string>={PENDING_EDIT:"待剪辑",EDITING:"剪辑中",REVISION_REQUESTED:"待修改",REVISING:"修改中",PENDING_REVIEW:"待用户确认",COMPLETED:"已完成"};
+function TaskBoard({notify,session}:{notify:(m:string)=>void;session:Session}) {
+  const [items,setItems]=useState<MaterialPackage[]>([]); const [status,setStatus]=useState(""); const [query,setQuery]=useState(""); const [loading,setLoading]=useState(true);
+  async function refresh(){setLoading(true);try{const p=await loadMaterialPackages(session.token,{...(status?{status}:{}),...(query?{query}:{}),page_size:"100"});setItems(p.items.filter(item=>["PENDING_EDIT","EDITING","REVISION_REQUESTED","REVISING","PENDING_REVIEW"].includes(item.status)))}catch(e){notify(e instanceof Error?e.message:"任务读取失败")}finally{setLoading(false)}}
+  // Remote task data is synchronized whenever filters change.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { void refresh(); }, [sort]);
-  const visiblePackages = packages.filter((item) =>
-    `${item.driver}${item.code}`.toLowerCase().includes(driverQuery.toLowerCase()),
-  );
-  const visible = visiblePackages.flatMap((item) =>
-    item.files
-      .filter((file) => type === "全部" || (type === "视频" ? file.media_type === "video" : file.media_type === "image"))
-      .map((file) => ({ file, driver: item.driver, code: item.code })),
-  );
-  const totalBytes = packages.reduce((sum, item) => sum + item.sizeBytes, 0);
-  const totalFiles = packages.reduce((sum, item) => sum + item.count, 0);
-  async function handleUpload(file?: File) {
-    if (!file || !targetDriver) return;
-    try {
-      notify(`正在上传：${file.name}`);
-      await uploadAsset(session.token, file, targetDriver);
-      notify(`上传完成：${file.name}`);
-      await refresh();
-    } catch (reason) {
-      notify(reason instanceof Error ? reason.message : "上传失败");
-    }
-  }
-  return (
-    <>
-      <div className="editor-heading">
-        <div>
-          <span className="kicker">统一素材夹</span>
-          <h1>所有司机上传的素材</h1>
-          <p>司机是检索条件，不限制素材跨司机调用。</p>
-        </div>
-        <div className="web-upload-controls">
-          <select value={targetDriver} onChange={(event) => setTargetDriver(event.target.value)} aria-label="选择素材所属司机">
-            {packages.map((item) => <option key={item.code} value={item.code}>{item.driver} · {item.code}</option>)}
-          </select>
-          <label className="solid-button">＋ 上传素材<input type="file" accept="video/*,image/*" onChange={(event) => void handleUpload(event.target.files?.[0])} /></label>
-        </div>
-      </div>
-      <div className="metric-grid">
-        <Metric
-          value={String(totalFiles)}
-          label="素材总数"
-          note={`${packages.length} 个司机素材包`}
-          tone="coral"
-        />
-        <Metric value={String(packages.filter((item) => item.count > 0).length)} label="有素材司机" note="按司机固定一个包" tone="blue" />
-        <Metric
-          value={formatBytes(totalBytes)}
-          label="素材占用"
-          note="原文件未压缩"
-          tone="amber"
-        />
-        <Metric value={loading ? "…" : "正常"} label="API 状态" note="数据来自 VPS" tone="green" />
-      </div>
-      <div className="folder-search">
-        <div>
-          <span>⌕</span>
-          <input
-            value={driverQuery}
-            onChange={(e) => setDriverQuery(e.target.value)}
-            placeholder="搜索司机姓名或编号，例如：王小明 / D023"
-          />
-          {driverQuery && <button onClick={() => setDriverQuery("")}>×</button>}
-        </div>
-        <p>
-          {driverQuery
-            ? `找到 ${visiblePackages.length} 个司机包、${visible.length} 个素材`
-            : `当前显示 ${packages.length} 个司机素材包`}
-        </p>
-      </div>
-      <div className="asset-panel">
-        <div className="table-toolbar">
-          <div>
-            <h2>素材文件</h2>
-            <p>点击缩略图可直接预览内容</p>
-          </div>
-          <div className="filters">
-            {["全部", "视频", "图片"].map((x) => (
-              <button
-                key={x}
-                className={type === x ? "active" : ""}
-                onClick={() => setType(x)}
-              >
-                {x}
-              </button>
-            ))}
-            <select value={sort} onChange={(event) => setSort(event.target.value as "time" | "type")} aria-label="素材排序">
-              <option value="time">按上传时间</option>
-              <option value="type">按文件类型</option>
-            </select>
-          </div>
-        </div>
-        {error && <div className="data-state error">{error}<button onClick={() => void refresh()}>重试</button></div>}
-        {loading && <div className="data-state">正在读取 VPS 素材…</div>}
-        <div className="asset-header">
-          <span>预览 / 文件名</span>
-          <span>上传司机</span>
-          <span>类型</span>
-          <span>大小</span>
-          <span>上传时间</span>
-          <span>操作</span>
-        </div>
-        {!loading && !error && visible.map(({ file, driver, code }) => (
-          <div className="asset-row" key={file.id}>
-            <div className="asset-file">
-              <button
-                className={`asset-thumb ${file.media_type === "video" ? "car" : "city"}`}
-                onClick={() => void previewAsset(session.token, file).catch((reason) => notify(reason.message))}
-              >
-                <span>{file.media_type === "video" ? "▶" : "▧"}</span>
-                <time>{file.media_type === "video" ? "视频" : "图片"}</time>
-              </button>
-              <div className="asset-title">
-                <strong>{file.original_name}</strong>
-                <small>
-                  <i className="new" />真实文件
-                </small>
-              </div>
-            </div>
-            <div className="driver-cell">
-              <span>{driver[0]}</span>
-              <div>
-                {driver}
-                <small>{code}</small>
-              </div>
-            </div>
-            <span
-              className={`type-tag ${file.media_type === "video" ? "video" : "image"}`}
-            >
-              {file.media_type === "video" ? "视频" : file.media_type === "image" ? "图片" : "文件"}
-            </span>
-            <span>{formatBytes(file.size_bytes)}</span>
-            <span>{formatTime(file.uploaded_at)}</span>
-            <div className="asset-actions">
-              <button onClick={() => void previewAsset(session.token, file).catch((reason) => notify(reason.message))}>
-                预览
-              </button>
-              <button onClick={() => void downloadAsset(session.token, file).catch((reason) => notify(reason.message))}>↓</button>
-            </div>
-          </div>
-        ))}
-      </div>
-      {!loading && !error && visible.length === 0 && <div className="data-state">当前筛选条件下还没有素材</div>}
-    </>
-  );
+  useEffect(()=>{void refresh()},[status,query]);
+  async function act(id:number,action:"start-editing"|"start-revision"){try{await transitionPackage(session.token,id,action);notify("任务状态已更新");await refresh()}catch(e){notify(e instanceof Error?e.message:"操作失败")}}
+  async function upload(item:MaterialPackage,file?:File){if(!file)return;notify(`回传给：${item.driverCode}`);try{const result=await uploadFinishedProduct(session.token,item.id,file,item.title);notify(`回传成功：${result.ownerAccount} · V${result.versionNumber}`);await refresh()}catch(e){notify(e instanceof Error?e.message:"成品回传失败")}}
+  return <><div className="editor-heading"><div><span className="kicker">待处理</span><h1>剪辑任务</h1><p>按素材包处理下载、剪辑、修改和确认。</p></div></div><div className="folder-search"><div><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索上传账号或素材包"/></div><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">待处理全部</option>{Object.entries(statusText).filter(([v])=>["PENDING_EDIT","EDITING","REVISION_REQUESTED","REVISING","PENDING_REVIEW"].includes(v)).map(([v,n])=><option key={v} value={v}>{n}</option>)}</select></div><div className="asset-panel"><div className="table-toolbar"><div><h2>任务队列</h2><p>{loading?"正在读取…":`${items.length} 个任务`}</p></div></div>{!loading&&items.map(item=><div className="asset-row task-row" key={item.id}><div className="asset-title"><strong>{item.title}</strong><small>上传账号 {item.driverCode} · 拍摄日期 {item.shootDate}</small></div><div>{item.fileCount} 个文件</div><div>{formatBytes(item.sizeBytes)}</div><div>{formatTime(item.submittedAt||item.createdAt)}</div><div><span className="status-badge">{statusText[item.status]||item.status}</span></div><div className="row-actions">{item.status==="PENDING_EDIT"&&<button onClick={()=>void act(item.id,"start-editing")}>开始剪辑</button>}{item.status==="REVISION_REQUESTED"&&<button onClick={()=>void act(item.id,"start-revision")}>开始修改</button>}{["EDITING","REVISING"].includes(item.status)&&<label className="solid-button return-product">回传给：{item.driverCode}<input type="file" accept="video/*" onChange={e=>void upload(item,e.target.files?.[0])}/></label>}</div></div>)}{!loading&&!items.length&&<div className="data-state">当前没有待处理任务</div>}</div></>
+}
+
+function AssetsPanel({notify,session}:{notify:(m:string)=>void;session:Session}) {
+  const [mode,setMode]=useState<"folders"|"files">("folders");
+  const [users,setUsers]=useState<Array<{account:string;display_name:string;package_count:number;asset_count:number}>>([]);
+  const [user,setUser]=useState(""); const [packages,setPackages]=useState<MaterialPackage[]>([]); const [packageId,setPackageId]=useState("");
+  const [assets,setAssets]=useState<LibraryAsset[]>([]);
+  const [filters,setFilters]=useState({date_from:"",date_to:"",theme:"",location:"",media_type:"",orientation:"",tag:"",status:"",query:"",sort:"newest"});
+  const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const [preview,setPreview]=useState<LibraryAsset|null>(null);
+  const selectedPackage=packages.find(item=>String(item.id)===packageId);
+  useEffect(()=>{loadUploadUsers(session.token).then(r=>setUsers(r.items)).catch(e=>notify(e instanceof Error?e.message:"用户读取失败"))},[session.token,notify]);
+  useEffect(()=>{loadMaterialPackages(session.token,{...(user?{driver_id:user}:{}),sort:"newest",page_size:"100"}).then(r=>setPackages(r.items)).catch(e=>notify(e instanceof Error?e.message:"素材包读取失败"))},[session.token,user,notify]);
+  const queryAssets=useCallback(async()=>{try{const params={...Object.fromEntries(Object.entries(filters).filter(([,v])=>v)),...(mode==="folders"&&packageId?{package_id:packageId}:{}),...(mode==="files"&&user?{driver_id:user}:{})};const result=await loadLibraryAssets(session.token,params);setError("");setAssets(result.items)}catch(e){setError(e instanceof Error?e.message:"素材读取失败")}finally{setLoading(false)}},[filters,mode,packageId,user,session.token]);
+  // Remote query synchronization; state updates occur only after the request settles.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{void queryAssets()},[queryAssets]);
+  function changeFilter(name:string,value:string){setFilters(current=>({...current,[name]:value}))}
+  const assetFile=(asset:LibraryAsset)=>({id:asset.id,original_name:asset.original_name,media_type:asset.media_type,mime_type:asset.mime_type,size_bytes:asset.size_bytes,uploaded_at:asset.uploaded_at});
+  async function packageAction(action:"start-editing"|"start-revision"){if(!selectedPackage)return;try{await transitionPackage(session.token,selectedPackage.id,action);notify("任务状态已更新")}catch(e){notify(e instanceof Error?e.message:"操作失败")}}
+  async function returnProduct(file?:File){if(!file||!selectedPackage)return;notify(`回传给：${selectedPackage.driverCode}`);try{const result=await uploadFinishedProduct(session.token,selectedPackage.id,file,selectedPackage.title);notify(`回传成功：${result.ownerAccount} · V${result.versionNumber}`)}catch(e){notify(e instanceof Error?e.message:"回传失败")}}
+  return <>
+    <div className="editor-heading"><div><span className="kicker">企业素材库</span><h1>素材库</h1><p>分清上传账号、素材包日期与文件真实上传时间。</p></div><div className="mode-switch library-modes"><button className={mode==="folders"?"active":""} onClick={()=>setMode("folders")}>文件夹模式</button><button className={mode==="files"?"active":""} onClick={()=>setMode("files")}>全部文件模式</button></div></div>
+    <div className="library-users"><button className={!user?"active":""} onClick={()=>{setUser("");setPackageId("")}}>全部用户</button>{users.map(item=><button key={item.account} className={user===item.account?"active":""} onClick={()=>{setUser(item.account);setPackageId("")}}><strong>{item.display_name}</strong><span>{item.account} · {item.package_count} 包 · {item.asset_count} 文件</span></button>)}</div>
+    {mode==="folders"&&<div className="package-browser"><div className="table-toolbar"><div><h2>{user?"选择素材包":"选择上传账号"}</h2><p>进入具体素材包后下载、预览或回传成品。</p></div></div>{user&&packages.map(item=><button key={item.id} className={`package-folder ${packageId===String(item.id)?"active":""}`} onClick={()=>setPackageId(String(item.id))}><span className="date-tile blue"><strong>{item.effectiveDate?.slice(5)||"—"}</strong><small>{item.dateSource==="shoot_date"?"拍摄日期":"上传日期"}</small></span><span><strong>{item.title}</strong><small>上传账号 {item.driverCode} · {item.theme} · {item.fileCount} 个文件</small></span></button>)}</div>}
+    {mode==="files"&&<div className="folder-search"><div><span>⌕</span><input value={filters.query} onChange={e=>changeFilter("query",e.target.value)} placeholder="搜索上传账号、素材包或文件"/></div></div>}
+    <div className="asset-panel library-asset-panel"><div className="table-toolbar"><div><h2>{mode==="folders"?(packageId?selectedPackage?.title:"请选择素材包"):"全部文件"}</h2><p>{assets.length} 个文件{selectedPackage?` · 回传给：${selectedPackage.driverCode}`:""}</p></div>{selectedPackage&&<div className="row-actions"><button onClick={()=>void downloadPackage(session.token,selectedPackage.id,selectedPackage.title).catch(e=>notify(e.message))}>下载全部</button>{selectedPackage.status==="PENDING_EDIT"&&<button onClick={()=>void packageAction("start-editing")}>开始剪辑</button>}{["EDITING","REVISING"].includes(selectedPackage.status)&&<label className="solid-button return-product">回传给：{selectedPackage.driverCode}<input type="file" accept="video/*" onChange={e=>void returnProduct(e.target.files?.[0])}/></label>}</div>}</div>{error&&<div className="data-state error">{error}<button onClick={()=>void queryAssets()}>重试</button></div>}{loading&&<div className="data-state">正在读取素材…</div>}<div className="asset-header"><span>预览 / 文件名 / 备注</span><span>上传账号</span><span>类型</span><span>大小</span><span>上传时间</span><span>操作</span></div>{((mode==="folders"&&packageId)||mode==="files")&&assets.map(asset=><div className="asset-row" key={asset.id}><div className="asset-file"><AssetThumbnail token={session.token} asset={asset} onOpen={()=>setPreview(asset)}/><div className="asset-title"><strong title={asset.original_name}>{asset.original_name}</strong><small>{asset.memo_text||"无文字备注"}</small></div></div><div className="driver-cell"><span>{asset.user_account[0]}</span><div>{asset.user_name}<small>{asset.user_account}</small></div></div><span className={`type-tag ${asset.media_type}`}>{asset.media_type==="video"?"视频":asset.media_type==="image"?"图片":"文件"}</span><span>{formatBytes(asset.size_bytes)}</span><span>{formatTime(asset.uploaded_at)}</span><div className="asset-actions"><button onClick={()=>setPreview(asset)}>预览</button><button onClick={()=>void downloadAsset(session.token,assetFile(asset)).catch(e=>notify(e.message))}>下载</button></div></div>)}</div>
+    {preview&&<AssetPreviewDialog token={session.token} asset={preview} onClose={()=>setPreview(null)}/>}
+  </>
+}
+
+function AssetThumbnail({token,asset,onOpen}:{token:string;asset:LibraryAsset;onOpen:()=>void}) {
+  const [url,setUrl]=useState(""); const [failed,setFailed]=useState(false);
+  useEffect(()=>{if(!["image","video"].includes(asset.media_type))return;let active=true;let objectUrl="";void loadAssetPreviewUrl(token,asset.id).then(value=>{objectUrl=value;if(active){setFailed(false);setUrl(value)}else URL.revokeObjectURL(value)}).catch(()=>{if(active)setFailed(true)});return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)}},[asset.id,asset.media_type,token]);
+  const media=url?(asset.media_type==="video"?<video src={url} muted preload="metadata" playsInline/>:<img src={url} alt="" loading="lazy"/>):null;
+  return <button type="button" className={`library-thumb ${asset.media_type}`} onClick={onOpen} aria-label={`预览 ${asset.original_name}`}>{media?<>{media}<span className="library-hover-preview">{asset.media_type==="video"?<video src={url} muted preload="metadata" playsInline/>:<img src={url} alt=""/>}</span></>:<span className="library-thumb-fallback">{failed?"预览失败":asset.media_type==="file"?"文件":"正在加载"}</span>}{asset.media_type==="video"&&<i className="video-play">▶</i>}<em>{asset.media_type==="video"?"视频":asset.media_type==="image"?"图片":"文件"}</em></button>;
+}
+
+function AssetPreviewDialog({token,asset,onClose}:{token:string;asset:LibraryAsset;onClose:()=>void}) {
+  const [url,setUrl]=useState(""); const [error,setError]=useState(""); const [zoom,setZoom]=useState(1);
+  useEffect(()=>{let active=true;let objectUrl="";void loadAssetPreviewUrl(token,asset.id).then(value=>{objectUrl=value;if(active)setUrl(value);else URL.revokeObjectURL(value)}).catch(e=>{if(active)setError(e instanceof Error?e.message:"预览失败")});return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)}},[asset.id,token]);
+  useEffect(()=>{const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose()};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close)},[onClose]);
+  return <div className="preview-backdrop" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target)onClose()}}><section className="preview-dialog" role="dialog" aria-modal="true" aria-label={`预览 ${asset.original_name}`}><header><div><strong>{asset.original_name}</strong><small>{asset.user_name} · {formatBytes(asset.size_bytes)} · {formatTime(asset.uploaded_at)}</small></div><button type="button" onClick={onClose} aria-label="关闭预览">×</button></header><div className="preview-stage">{error?<div className="data-state error">{error}</div>:!url?<div className="preview-loading">正在加载预览…</div>:asset.media_type==="video"?<video src={url} controls autoPlay playsInline><track kind="captions" srcLang="zh" label="暂无字幕"/></video>:asset.media_type==="image"?<img src={url} alt={asset.original_name} style={{transform:`scale(${zoom})`}}/>:<div className="preview-loading">此文件不支持在线预览，请下载后查看。</div>}</div>{asset.media_type==="image"&&url&&<footer><button onClick={()=>setZoom(value=>Math.max(.5,value-.25))}>缩小</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(value=>Math.min(3,value+.25))}>放大</button><button onClick={()=>setZoom(1)}>还原</button></footer>}</section></div>;
 }
 
 function formatBytes(bytes: number) {
@@ -517,150 +432,25 @@ function formatTime(value: string | null) {
   return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function DriversPanel({ notify }: { notify: (m: string) => void }) {
-  const rows = [
-    ["王小明", "D023", "大阪营业所", "32 个", "08-15 10:42"],
-    ["陈师傅", "D024", "京都营业所", "27 个", "08-15 09:18"],
-    ["李师傅", "D025", "神户营业所", "18 个", "08-14 18:26"],
-  ];
-  return (
-    <>
-      <div className="editor-heading">
-        <div>
-          <span className="kicker">成员管理</span>
-          <h1>司机账户</h1>
-          <p>查看司机的上传数量与最近活动。</p>
-        </div>
-        <button
-          className="solid-button"
-          onClick={() => notify("新增司机窗口已打开（原型示意）")}
-        >
-          ＋ 新增司机
-        </button>
-      </div>
-      <SimpleTable
-        heads={["司机", "编号", "所属营业所", "素材数量", "最近上传"]}
-        rows={rows}
-      />
-    </>
-  );
-}
-function StatsPanel() {
-  return (
-    <>
-      <div className="editor-heading">
-        <div>
-          <span className="kicker">工作统计</span>
-          <h1>剪辑统计</h1>
-          <p>一个成品由司机确认后计入完成数量。</p>
-        </div>
-      </div>
-      <div className="metric-grid">
-        <Metric value="28" label="本月完成" note="较上月 +6" tone="green" />
-        <Metric value="21" label="一次通过" note="通过率 75%" tone="blue" />
-        <Metric value="9" label="修改次数" note="平均 0.32 次" tone="amber" />
-        <Metric value="18h" label="首次交稿" note="平均用时" tone="coral" />
-      </div>
-      <SimpleTable
-        heads={["月份", "完成视频", "一次通过", "修改次数", "平均完成时间"]}
-        rows={[
-          ["2026年8月", "28", "21", "9", "26小时"],
-          ["2026年7月", "22", "16", "11", "31小时"],
-          ["2026年6月", "19", "13", "8", "29小时"],
-        ]}
-      />
-    </>
-  );
-}
-function LogsPanel() {
-  return (
-    <>
-      <div className="editor-heading">
-        <div>
-          <span className="kicker">系统记录</span>
-          <h1>操作记录</h1>
-          <p>上传、预览、下载和成品回传都会保留记录。</p>
-        </div>
-      </div>
-      <SimpleTable
-        heads={["时间", "操作人", "动作", "文件", "结果"]}
-        rows={[
-          ["08-15 10:42", "王小明", "上传素材", "关西机场出发_01.MOV", "成功"],
-          ["08-15 10:46", "剪辑师", "预览素材", "车辆清洁_02.MOV", "成功"],
-          ["08-15 11:08", "剪辑师", "上传成品", "V2_日常叙事版.mp4", "成功"],
-          ["08-15 11:15", "王小明", "选择版本", "方案 B", "已确认"],
-        ]}
-      />
-    </>
-  );
-}
-function SimpleTable({ heads, rows }: { heads: string[]; rows: string[][] }) {
-  return (
-    <div className="simple-table">
-      <div>
-        {heads.map((h) => (
-          <strong key={h}>{h}</strong>
-        ))}
-      </div>
-      {rows.map((row, i) => (
-        <div key={i}>
-          {row.map((cell, j) => (
-            <span key={j}>{cell}</span>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
 function FinishedFolder({
-  onUpload,
   notify,
+  session,
 }: {
-  onUpload: () => void;
   notify: (m: string) => void;
+  session: Session;
 }) {
   const [query, setQuery] = useState("");
-  const finished = [
-    ...versions.map((v, i) => ({
-      ...v,
-      driver: "王小明",
-      code: "D023",
-      size: 82 + i * 14,
-      date: "2026-08-15",
-    })),
-    {
-      ...versions[0],
-      id: "D",
-      title: "京都早班成片",
-      driver: "陈师傅",
-      code: "D024",
-      size: 126,
-      date: "2026-08-14",
-    },
-    {
-      ...versions[1],
-      id: "E",
-      title: "神户接送成片",
-      driver: "李师傅",
-      code: "D025",
-      size: 104,
-      date: "2026-08-13",
-    },
-  ];
-  const shown = finished.filter((item) =>
-    `${item.driver}${item.code}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [shown,setShown]=useState<FinishedProduct[]>([]); const [loading,setLoading]=useState(true);
+  const [feedback,setFeedback]=useState<Array<{id:number;productTitle:string;driverCode:string;message:string;createdAt:string;status:string;reply:string|null}>>([]);
+  useEffect(()=>{Promise.all([loadFinishedProducts(session.token,query),loadRevisions(session.token)]).then(([products,revisions])=>{setShown(products.items);setFeedback(revisions.items)}).catch(e=>notify(e instanceof Error?e.message:"成品读取失败")).finally(()=>setLoading(false))},[session.token,query,notify]);
   return (
     <>
       <div className="editor-heading">
         <div>
           <span className="kicker">统一成品夹</span>
           <h1>剪辑完成的视频</h1>
-          <p>可以跨司机搜索、预览和调用已经完成的内容。</p>
+          <p>可以跨用户搜索、预览和调用已经完成的内容。</p>
         </div>
-        <button className="solid-button" onClick={onUpload}>
-          ＋ 上传多个成品
-        </button>
       </div>
       <div className="folder-search">
         <div>
@@ -668,204 +458,46 @@ function FinishedFolder({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索司机姓名或编号，例如：陈师傅 / D024"
+            placeholder="搜索用户名或素材账号"
           />
           {query && <button onClick={() => setQuery("")}>×</button>}
         </div>
         <p>
-          {query ? `找到 ${shown.length} 个对应成品` : `当前显示全部司机成品`}
+          {query ? `找到 ${shown.length} 个对应成品` : `当前显示全部用户成品`}
         </p>
       </div>
       <div className="finished-grid">
-        {shown.map((v, i) => (
+        {shown.map((v) => (
           <article className="finished-card" key={v.id}>
-            <VideoCover version={v} />
+            <VideoCover version={{id:String(v.id),title:v.title,duration:`V${(v as FinishedProduct & {versionNumber?:number}).versionNumber||1}`,note:v.originalName,color:"#2767e8"}} />
             <div>
               <h3>{v.title}</h3>
               <p>
-                {v.driver} · {v.code} · {v.date} · {v.size} MB
+                {v.driverCode} · {v.packageTitle||"历史素材包"} · {formatTime(v.uploadedAt)} · {formatBytes(v.sizeBytes)}
               </p>
-              <span className={`pill ${i === 1 ? "green" : "blue"}`}>
-                {i === 1 ? "当前候选" : "可供调用"}
-              </span>
+              <span className={`pill ${v.isCurrent?"green":"blue"}`}>{v.isCurrent?"当前成品":`历史版本 V${v.versionNumber||1}`}</span>
               <button
                 className="reuse-button"
-                onClick={() => notify(`已选取${v.driver}的成品：${v.title}`)}
+                onClick={() => void downloadFinishedProduct(session.token,v).catch(e=>notify(e.message))}
               >
-                选取此成品
+                下载成品
               </button>
             </div>
           </article>
         ))}
-      </div>
-    </>
-  );
-}
-function Metric({
-  value,
-  label,
-  note,
-  tone,
-}: {
-  value: string;
-  label: string;
-  note: string;
-  tone: string;
-}) {
-  return (
-    <article className={`metric ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-      <i />
-    </article>
-  );
-}
-function UploadPanel({ close, done }: { close: () => void; done: () => void }) {
-  return (
-    <div className="modal-backdrop" onMouseDown={close}>
-      <section className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={close}>
-          ×
-        </button>
-        <span className="kicker">公司统一素材夹</span>
-        <h2>上传照片与视频</h2>
-        <p>自动记录你的姓名、文件类型、大小和上传时间，不再创建日期素材包。</p>
-        <div className="dropzone">
-          <span>↑</span>
-          <strong>点击选择或拖入文件</strong>
-          <small>支持 MP4、MOV、JPG、PNG</small>
-        </div>
-        <div className="upload-files">
-          <p>
-            <span>关西机场出发_01.MOV</span>
-            <strong>完成</strong>
-          </p>
-          <i>
-            <b style={{ width: "100%" }} />
-          </i>
-          <p>
-            <span>车辆清洁_02.MOV</span>
-            <strong>72%</strong>
-          </p>
-          <i>
-            <b style={{ width: "72%" }} />
-          </i>
-        </div>
-        <button className="solid-button full" onClick={done}>
-          上传到统一素材夹
-        </button>
-      </section>
-    </div>
-  );
-}
-function RevisionModal({
-  close,
-  done,
-}: {
-  close: () => void;
-  done: () => void;
-}) {
-  const [issue, setIssue] = useState("删除镜头");
-  return (
-    <div className="modal-backdrop" onMouseDown={close}>
-      <section
-        className="modal revision-modal"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <button className="modal-close" onClick={close}>
-          ×
-        </button>
-        <span className="kicker">当前成品 V1</span>
-        <h2>提出修改要求</h2>
-        <p>告诉剪辑师具体时间点和需要调整的内容。</p>
-        <label className="field-label">问题类型</label>
-        <div className="issue-types">
-          {[
-            "字幕修改",
-            "更换音乐",
-            "删除镜头",
-            "画面打码",
-            "视频太长",
-            "其他",
-          ].map((x) => (
-            <button
-              key={x}
-              className={issue === x ? "active" : ""}
-              onClick={() => setIssue(x)}
-            >
-              {x}
-            </button>
-          ))}
-        </div>
-        <div className="revision-fields">
-          <label>
-            <span>视频时间点</span>
-            <input defaultValue="00:18" placeholder="例如 00:18" />
-          </label>
-          <label>
-            <span>修改说明</span>
-            <textarea defaultValue="这里出现了客人的正脸，请删除；结尾公司 Logo 再停留 2 秒。" />
-          </label>
-        </div>
-        <div className="revision-tip">
-          提交后，当前成品状态将变为“修改中”，剪辑师回传 V2 后会再次通知你。
-        </div>
-        <div className="modal-actions">
-          <button className="ghost-button" onClick={close}>
-            取消
-          </button>
-          <button className="solid-button" onClick={done}>
-            提交修改要求
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-function BatchVersionModal({
-  close,
-  done,
-}: {
-  close: () => void;
-  done: () => void;
-}) {
-  return (
-    <div className="modal-backdrop" onMouseDown={close}>
-      <section
-        className="modal batch-modal"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <button className="modal-close" onClick={close}>
-          ×
-        </button>
-        <span className="kicker">统一成品夹</span>
-        <h2>回传最新成品</h2>
-        <p>每次只回传一个当前版本；新版本不会覆盖后台历史记录。</p>
-        <div className="batch-person">
-          <label>接收司机</label>
-          <strong>王小明 · D023</strong>
-        </div>
-        <div className="batch-files">
-          <div>
-            <span className="file-icon">▶</span>
-            <p>
-              <strong>V1_大寅司机的一天.mp4</strong>
-              <small>00:58 · 108 MB</small>
-            </p>
-            <label>当前版本</label>
-            <button>×</button>
+        {!loading&&shown.length === 0 && (
+          <div className="finished-empty">
+            <strong>{query ? "没有找到对应成品" : "成品文件夹还是空的"}</strong>
+            <span>
+              {query
+                ? "请更换用户名或素材账号后再试。"
+                : "剪辑师上传成品后，会在这里显示封面、用户、时间和文件大小。"}
+            </span>
           </div>
-        </div>
-        <div className="modal-actions">
-          <button className="ghost-button" onClick={close}>
-            取消
-          </button>
-          <button className="solid-button" onClick={done}>
-            回传并通知司机
-          </button>
-        </div>
-      </section>
-    </div>
+        )}
+        {loading&&<div className="data-state">正在读取成品…</div>}
+      </div>
+      <div className="simple-table"><div><strong>成品</strong><strong>上传账号</strong><strong>修改意见</strong><strong>状态</strong><strong>回复</strong></div>{feedback.map(item=><div key={item.id}><span>{item.productTitle}</span><span>{item.driverCode}</span><span>{item.message}</span><span>{item.status}</span><span>{item.reply||"—"}</span></div>)}</div>
+    </>
   );
 }

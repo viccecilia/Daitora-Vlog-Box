@@ -1,10 +1,7 @@
 <view class="page">
-  <view class="kicker">08月15日 · 王小明 D023</view><view class="title">今天拍了什么？</view><view class="muted">把素材传上来，剩下的交给剪辑师。</view>
+  <view class="home-profile"><view><view class="kicker">{{user.id}}</view><view class="muted">{{user.name}}</view></view><button bindtap="logout">退出登录</button></view><view class="title">素材与成品</view><view class="muted">上传原始素材，或查看剪辑师回传的最新成品。</view>
   <view class="actions">
     <view class="action upload" bindtap="goUpload"><view class="icon">↑</view><view><view class="name">上传素材</view><view class="desc">照片与视频，可多选</view></view><view class="arrow">›</view></view>
-    <view class="action result" bindtap="goResult"><view class="icon">↓</view><view><view class="name">查看成品</view><view class="desc">1 个最新成品待确认</view></view><view class="arrow">›</view></view>
+    <view class="action result" bindtap="goResult"><view class="icon">↓</view><view><view class="name">我的成品</view><view class="desc">预览、下载、确认或提出修改</view></view><view class="arrow">›</view></view>
   </view>
-  <view class="card status"><view><b>8</b><text>今日上传</text></view><view><b>1</b><text>待确认</text></view><view><b>7</b><text>本月完成</text></view></view>
-  <view class="recent-title">最近状态</view>
-  <view class="card recent"><view class="row between"><view><b>大寅司机的一天</b><view class="muted small">V1 · 08-15 11:08</view></view><view class="tag">待确认</view></view></view>
 </view>

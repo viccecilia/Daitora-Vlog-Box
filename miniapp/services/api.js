@@ -14,12 +14,13 @@ function request(path, options = {}) {
   })
 }
 
-function uploadFile(filePath, onProgress) {
+function uploadFile(filePath, packageId, memoText, metadata, onProgress) {
   return new Promise((resolve, reject) => {
     const task = wx.uploadFile({
       url: `${app.globalData.apiBase}/assets/upload`,
       filePath,
       name: "file",
+      formData: { ...(packageId ? { package_id: String(packageId) } : {}), ...(memoText ? { memo_text: memoText } : {}), ...(metadata&&metadata.duration?{duration:String(metadata.duration)}:{}), ...(metadata&&metadata.width?{width:String(metadata.width)}:{}), ...(metadata&&metadata.height?{height:String(metadata.height)}:{}) },
       header: { Authorization: `Bearer ${wx.getStorageSync("token")}` },
       success: response => {
         let data = response.data

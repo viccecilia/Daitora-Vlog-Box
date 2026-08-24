@@ -1,11 +1,11 @@
 <view class="login-page">
-  <view class="logo">D</view>
-  <view class="brand">Daitora</view><view class="sub">VLOG BOX</view>
+  <image class="logo" src="/assets/vlog-box-logo.png" mode="aspectFit" />
+  <view class="sub">VLOG BOX</view>
   <view class="welcome">登录素材协作中心</view>
   <view class="login-form">
     <view class="field">
       <view class="field-label">账号</view>
-      <input placeholder="请输入司机编号或工作账号" value="{{account}}" bindinput="onAccountInput" confirm-type="next" />
+      <input placeholder="输入用户名" value="{{account}}" bindinput="onAccountInput" confirm-type="next" />
     </view>
     <view class="field">
       <view class="field-label">密码</view>
@@ -16,6 +16,4 @@
     </view>
   </view>
   <button class="primary login" loading="{{loading}}" disabled="{{loading}}" bindtap="login">登录</button>
-  <view class="hint">系统会根据账号权限自动进入司机端或剪辑师端</view>
-  <view class="demo-hint">演示：司机 D023 / 123456　剪辑师 editor / Daitora1028</view>
 </view>

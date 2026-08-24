@@ -1,0 +1,1 @@
+.profile-card{margin-top:36rpx}.label{font-size:24rpx;font-weight:700;color:#526078;margin:24rpx 0 12rpx}.profile-card input{height:88rpx;border:1rpx solid #dfe4ec;border-radius:18rpx;padding:0 24rpx;background:#fff}.profile-card input[disabled]{background:#f3f5f8;color:#8b95a5}.profile-card button{margin-top:40rpx}

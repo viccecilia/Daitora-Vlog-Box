@@ -13,16 +13,18 @@ chmod 700 data data/uploads runtime
 if [ ! -f .env ]; then
   umask 077
   SESSION_SECRET="$(openssl rand -hex 32)"
+  ADMIN_PASSWORD="$(openssl rand -base64 24)"
+  EDITOR_PASSWORD="$(openssl rand -base64 24)"
+  UPLOADER_PASSWORD="$(openssl rand -base64 24)"
   printf '%s\n' \
     'DAITORA_DATA_DIR=/home/ubuntu/daitora-media-library/data' \
-    'MAX_UPLOAD_BYTES=209715200' \
+    'MAX_UPLOAD_BYTES=0' \
     'TOKEN_TTL_SECONDS=604800' \
     'ALLOWED_ORIGINS=https://daitora-vlog-box-prototype.pangvic9.chatgpt.site' \
     "SESSION_SECRET=$SESSION_SECRET" \
-    'BOOTSTRAP_ADMIN_PASSWORD=Daitora1028' \
-    'BOOTSTRAP_EDITOR_PASSWORD=Daitora1028' \
-    'BOOTSTRAP_DRIVER_PASSWORD=123456' > .env
+    "BOOTSTRAP_ADMIN_PASSWORD=$ADMIN_PASSWORD" \
+    "BOOTSTRAP_EDITOR_PASSWORD=$EDITOR_PASSWORD" \
+    "BOOTSTRAP_UPLOADER_PASSWORD=$UPLOADER_PASSWORD" > .env
 fi
 
 .venv/bin/python -m py_compile app.py
-
