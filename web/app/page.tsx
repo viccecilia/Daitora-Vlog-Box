@@ -379,6 +379,7 @@ function EditorView({ notify }: { notify: (m: string) => void }) {
         </div>
       </aside>
       <section className="editor-main">
+        <EditorAiTool notify={notify} />
         {panel === "assets" && (
           <AssetsPanel
             visible={visible}
@@ -409,6 +410,71 @@ function EditorView({ notify }: { notify: (m: string) => void }) {
         />
       )}
     </div>
+  );
+}
+
+
+function EditorAiTool({ notify }: { notify: (m: string) => void }) {
+  const [selectedName, setSelectedName] = useState("");
+
+  return (
+    <section className="editor-ai-tool">
+      <div className="editor-ai-copy">
+        <span className="kicker">AI VIDEO TOOL</span>
+        <h2>一键去除视频文字</h2>
+        <p>上传带字幕或水印的视频，处理完成后直接下载无字版本。</p>
+
+        <div className={`editor-ai-status ${selectedName ? "ready" : ""}`}>
+          <span>{selectedName ? "✓" : "AI"}</span>
+          <div>
+            <strong>{selectedName ? "视频已选择" : "等待上传视频"}</strong>
+            <small>
+              {selectedName || "支持 MP4 / MOV，处理结果将在这里保持当前任务状态"}
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div className="editor-ai-actions">
+        <label className="editor-ai-button upload">
+          <input
+            type="file"
+            accept="video/mp4,video/quicktime,.mp4,.mov"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              setSelectedName(file.name);
+              notify(`已选择视频：${file.name}`);
+            }}
+          />
+          <span className="editor-ai-button-icon">↑</span>
+          <span>
+            <strong>上传视频</strong>
+            <small>选择要去除文字的视频</small>
+          </span>
+          <b>›</b>
+        </label>
+
+        <button
+          className="editor-ai-button download"
+          type="button"
+          onClick={() =>
+            notify(
+              selectedName
+                ? "AI 处理接口接入后，将从这里下载无字成品"
+                : "请先上传一个视频",
+            )
+          }
+        >
+          <span className="editor-ai-button-icon">↓</span>
+          <span>
+            <strong>下载成品</strong>
+            <small>{selectedName ? "处理完成后直接下载" : "等待处理结果"}</small>
+          </span>
+          <b>›</b>
+        </button>
+      </div>
+    </section>
   );
 }
 
